@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react'
 
 const ADMIN_WALLET = (import.meta.env.VITE_ADMIN_WALLET || '0xf9346827f713eb953a2e22465b9ee91901726bdc').toLowerCase()
 const API_BASE = import.meta.env.VITE_API_URL || '/api'
@@ -12,10 +12,31 @@ export function WalletProvider({ children }) {
   const [username, setUsername] = useState(() => localStorage.getItem('aos_username') || '')
   const [connecting, setConnecting] = useState(false)
   const [error, setError] = useState('')
+  const [walletProviders, setWalletProviders] = useState([])
+  const activeProvider = useRef(null)
 
   const connected = !!wallet
   const role = connected && wallet.toLowerCase() === ADMIN_WALLET ? 'admin' : 'user'
   const hasInjected = typeof window !== 'undefined' && !!window.ethereum
+
+  // EIP-6963: Discover all installed wallet providers
+  useEffect(() => {
+    const discovered = new Map()
+
+    const handleAnnounce = (event) => {
+      const { info, provider } = event.detail
+      if (info && provider && !discovered.has(info.uuid)) {
+        discovered.set(info.uuid, { info, provider })
+        setWalletProviders(Array.from(discovered.values()))
+      }
+    }
+
+    window.addEventListener('eip6963:announceProvider', handleAnnounce)
+    // Request all wallets to announce themselves
+    window.dispatchEvent(new Event('eip6963:requestProvider'))
+
+    return () => window.removeEventListener('eip6963:announceProvider', handleAnnounce)
+  }, [])
 
   // Admin is always considered registered
   const isRegistered = role === 'admin' || registered
@@ -45,11 +66,12 @@ export function WalletProvider({ children }) {
   }, [])
 
   // Sign a message to verify wallet ownership
-  const signMessage = useCallback(async (addr) => {
-    if (!window.ethereum) return false
+  const signMessage = useCallback(async (addr, provider) => {
+    const p = provider || activeProvider.current || window.ethereum
+    if (!p) return false
     try {
       const message = `Welcome to AdvocateOS!\n\nSign this message to verify your wallet ownership.\n\nWallet: ${addr}\nTimestamp: ${Date.now()}`
-      await window.ethereum.request({
+      await p.request({
         method: 'personal_sign',
         params: [message, addr],
       })
@@ -67,15 +89,17 @@ export function WalletProvider({ children }) {
   }, [])
 
   // Full connect flow: request accounts → sign message → check registration
-  const connectInjected = useCallback(async () => {
-    if (!window.ethereum) {
+  const connectInjected = useCallback(async (provider) => {
+    const p = provider || window.ethereum
+    if (!p) {
       setError('No wallet detected. Install MetaMask or another browser wallet.')
       return
     }
+    activeProvider.current = p
     setConnecting(true)
     setError('')
     try {
-      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' })
+      const accounts = await p.request({ method: 'eth_requestAccounts' })
       if (!accounts || accounts.length === 0) {
         setError('No accounts returned.')
         return
@@ -84,7 +108,7 @@ export function WalletProvider({ children }) {
       persist(addr)
 
       // Sign message to verify ownership
-      const didSign = await signMessage(addr)
+      const didSign = await signMessage(addr, p)
       if (!didSign) {
         // Revert connection if they won't sign
         setWallet('')
@@ -139,7 +163,8 @@ export function WalletProvider({ children }) {
 
   // Listen for account changes
   useEffect(() => {
-    if (!window.ethereum) return
+    const p = activeProvider.current || window.ethereum
+    if (!p) return
     const handleChange = (accounts) => {
       if (accounts.length === 0) {
         disconnect()
@@ -151,8 +176,8 @@ export function WalletProvider({ children }) {
         localStorage.setItem('aos_registered', 'false')
       }
     }
-    window.ethereum.on('accountsChanged', handleChange)
-    return () => window.ethereum.removeListener('accountsChanged', handleChange)
+    p.on('accountsChanged', handleChange)
+    return () => p.removeListener('accountsChanged', handleChange)
   }, [disconnect])
 
   // Re-check registration on load if wallet is already connected
@@ -165,7 +190,7 @@ export function WalletProvider({ children }) {
   return (
     <WalletContext.Provider value={{
       wallet, connected, role, connecting, error, hasInjected,
-      signed, isRegistered, needsOnboarding, username,
+      signed, isRegistered, needsOnboarding, username, walletProviders,
       connectInjected, connectManual, disconnect, setError,
       markRegistered, checkRegistration,
     }}>
