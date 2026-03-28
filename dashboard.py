@@ -51,7 +51,7 @@ def gl_call(method, *args):
     for a in args:
         cmd += ["--args", str(a)]
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=READ_TIMEOUT, shell=True)
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=READ_TIMEOUT)
         for line in (r.stdout + r.stderr).split("\n"):
             s = line.strip()
             if s.startswith("{") or s.startswith("["):
@@ -66,7 +66,7 @@ def gl_write(method, *args):
     for a in args:
         cmd += ["--args", str(a)]
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=WRITE_TIMEOUT, shell=True)
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=WRITE_TIMEOUT)
         return "successfully" in (r.stdout + r.stderr).lower()
     except Exception:
         return False
