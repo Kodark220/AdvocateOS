@@ -1,0 +1,80 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background-color: #0a0a0a;
+  color: #f5f5f5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-family: 'Syne', sans-serif;
+}
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background-color: #111111; }
+::-webkit-scrollbar-thumb { border-radius: 4px; background-color: #2a2a2a; }
+::-webkit-scrollbar-thumb:hover { background-color: #555555; }
+
+::selection { background-color: #e8ff00; color: #0a0a0a; }
+
+@layer components {
+  .grid-bg {
+    background-image:
+      linear-gradient(rgba(42,42,42,.4) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(42,42,42,.4) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  .card {
+    @apply relative overflow-hidden rounded-sm border border-edge bg-core;
+  }
+
+  .card-hover {
+    @apply card cursor-pointer transition-all duration-200;
+  }
+  .card-hover:hover {
+    @apply border-muted bg-surface;
+  }
+
+  .badge-status {
+    @apply rounded-sm px-2 py-0.5 font-mono text-xs font-medium uppercase tracking-widest;
+  }
+
+  .btn-primary {
+    @apply rounded-sm bg-acid px-5 py-2.5 text-sm font-bold text-void transition-all duration-150;
+  }
+  .btn-primary:hover { @apply bg-yellow-300; }
+  .btn-primary:active { @apply scale-95; }
+  .btn-primary:disabled { @apply cursor-not-allowed opacity-40; }
+
+  .btn-ghost {
+    @apply rounded-sm border border-edge px-4 py-2 font-mono text-sm text-ghost transition-all duration-150;
+  }
+  .btn-ghost:hover { @apply border-muted text-wire; }
+
+  .input-field {
+    @apply w-full rounded-sm border border-edge bg-surface px-3 py-2.5 font-mono text-sm text-signal transition-colors;
+  }
+  .input-field::placeholder { @apply text-muted; }
+  .input-field:focus { @apply border-acid outline-none ring-1 ring-acid/20; }
+
+  .label-field {
+    @apply mb-1.5 block font-mono text-xs uppercase tracking-widest text-ghost;
+  }
+
+  .tag-acid {
+    @apply badge-status border border-acid/20 bg-acid/10 text-acid;
+  }
+  .tag-burn {
+    @apply badge-status border border-burn/20 bg-burn/10 text-burn;
+  }
+  .tag-pulse {
+    @apply badge-status border border-pulse/20 bg-pulse/10 text-pulse;
+  }
+  .tag-valid {
+    @apply badge-status border border-valid/20 bg-valid/10 text-valid;
+  }
+  .tag-warn {
+    @apply badge-status border border-warn/20 bg-warn/10 text-warn;
+  }
+}

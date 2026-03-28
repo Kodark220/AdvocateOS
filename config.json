@@ -1,0 +1,7 @@
+{
+  "account_urls": {
+    "2": "https://api.example.com/hsbc/account/87654321/transactions",
+    "1": "https://jsonplaceholder.typicode.com/posts/1"
+  },
+  "response_urls": {}
+}
