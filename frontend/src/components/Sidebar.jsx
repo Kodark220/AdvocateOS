@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Users, ShieldAlert, Settings, Shield, FileText, AlertTriangle, LogOut } from 'lucide-react'
+import { LayoutDashboard, Users, ShieldAlert, Settings, Shield, FileText, AlertTriangle, UserPlus, LogOut } from 'lucide-react'
 import { useWallet } from '../context/WalletContext'
 
 const adminLinks = [
@@ -11,6 +11,7 @@ const adminLinks = [
 
 const userLinks = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/register', icon: UserPlus, label: 'Add Account' },
   { to: '/my-cases', icon: FileText, label: 'My Cases' },
   { to: '/report', icon: AlertTriangle, label: 'Report' },
   { to: '/settings', icon: Settings, label: 'Settings' },

@@ -66,18 +66,16 @@ export default function UserDashboard() {
 
         {/* Quick actions */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
-          {myAccounts.length === 0 && (
-            <Link to="/register" className="card-hover p-5 flex items-center gap-4 border-acid/30">
-              <div className="w-10 h-10 rounded-sm bg-acid/10 border border-acid/20 flex items-center justify-center flex-shrink-0">
-                <UserPlus className="w-5 h-5 text-acid" />
-              </div>
-              <div>
-                <div className="text-sm font-bold text-signal">Register Account</div>
-                <div className="font-mono text-[11px] text-muted mt-0.5">Complete your on-chain registration</div>
-              </div>
-              <ChevronRight className="w-4 h-4 text-edge ml-auto" />
-            </Link>
-          )}
+          <Link to="/register" className="card-hover p-5 flex items-center gap-4 border-acid/30">
+            <div className="w-10 h-10 rounded-sm bg-acid/10 border border-acid/20 flex items-center justify-center flex-shrink-0">
+              <UserPlus className="w-5 h-5 text-acid" />
+            </div>
+            <div>
+              <div className="text-sm font-bold text-signal">{myAccounts.length === 0 ? 'Register Account' : 'Add Another Account'}</div>
+              <div className="font-mono text-[11px] text-muted mt-0.5">{myAccounts.length === 0 ? 'Link your wallet to an on-chain account' : 'Register another institution account'}</div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-edge ml-auto" />
+          </Link>
           <Link to="/report" className="card-hover p-5 flex items-center gap-4">
             <div className="w-10 h-10 rounded-sm bg-burn/10 border border-burn/20 flex items-center justify-center flex-shrink-0">
               <AlertTriangle className="w-5 h-5 text-burn" />
