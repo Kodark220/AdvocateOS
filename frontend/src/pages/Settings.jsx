@@ -1,6 +1,6 @@
 import { Link2 } from 'lucide-react'
 
-const CONTRACT = '0xAE693Bbb157FAf221bc6F6f12766f494Ae99aef3'
+const CONTRACT = '0x6E7694c3ffbB4b109b2A37D009cE29425039E9da'
 
 export default function Settings() {
   return (

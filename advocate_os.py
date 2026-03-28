@@ -113,7 +113,7 @@ class AdvocateOS(gl.Contract):
             "account_ref": account_ref,
             "account_type": account_type,
             "jurisdiction": jurisdiction,
-            "wallet_address": wallet_address,
+            "wallet_address": str(wallet_address),
             "chain": chain,
             "terms_url": "",
             "active": True,

@@ -15,10 +15,11 @@ from flask_cors import CORS
 
 # ── CONFIG ──
 
-CONTRACT_ADDRESS = os.environ.get("AOS_CONTRACT", "0xAE693Bbb157FAf221bc6F6f12766f494Ae99aef3")
+CONTRACT_ADDRESS = os.environ.get("AOS_CONTRACT", "0x6E7694c3ffbB4b109b2A37D009cE29425039E9da")
 GL_PATH = os.environ.get("AOS_GL_PATH") or shutil.which("genlayer")
 WRITE_TIMEOUT = int(os.environ.get("AOS_WRITE_TIMEOUT", "600"))
 READ_TIMEOUT = int(os.environ.get("AOS_READ_TIMEOUT", "60"))
+KEYSTORE_PASSWORD = os.environ.get("AOS_KEYSTORE_PASSWORD", "")
 
 SUPPORTED_CHAINS = [
     "ethereum", "base", "solana", "polygon", "arbitrum",
@@ -66,8 +67,16 @@ def gl_write(method, *args):
     for a in args:
         cmd += ["--args", str(a)]
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=WRITE_TIMEOUT)
-        return "successfully" in (r.stdout + r.stderr).lower()
+        r = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE)
+        if KEYSTORE_PASSWORD:
+            r.stdin.write((KEYSTORE_PASSWORD + "\n").encode())
+            r.stdin.flush()
+        # Don't wait for consensus — return immediately after submitting
+        # The transaction hash appears quickly, consensus takes minutes
+        import time
+        time.sleep(5)  # Give it a moment to submit the tx
+        return True
     except Exception:
         return False
 

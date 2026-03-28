@@ -27,7 +27,7 @@ import notifications
 
 # ── CONFIGURATION ──
 
-CONTRACT_ADDRESS = os.environ.get("AOS_CONTRACT", "0xAE693Bbb157FAf221bc6F6f12766f494Ae99aef3")
+CONTRACT_ADDRESS = os.environ.get("AOS_CONTRACT", "0x6E7694c3ffbB4b109b2A37D009cE29425039E9da")
 GL_PATH = os.environ.get("AOS_GL_PATH") or shutil.which("genlayer")
 
 # How often the agent checks (seconds)
