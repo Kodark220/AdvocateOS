@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Users, ShieldAlert, Settings, Shield, FileText, AlertTriangle, UserPlus, LogOut } from 'lucide-react'
+import { LayoutDashboard, Users, ShieldAlert, Settings, FileText, AlertTriangle, UserPlus, LogOut } from 'lucide-react'
 import { useWallet } from '../context/WalletContext'
 
 const adminLinks = [
@@ -26,7 +26,7 @@ export default function Sidebar() {
       {/* Logo */}
       <div className="px-5 pt-6 pb-5 border-b border-edge">
         <div className="flex items-center gap-2.5">
-          <Shield className="w-5 h-5 text-acid" />
+          <img src="/logo_png.jpg" alt="AdvocateOS" className="w-6 h-6 rounded-full" />
           <span className="text-lg font-bold tracking-tight text-signal">AdvocateOS</span>
         </div>
         {role === 'admin' && (

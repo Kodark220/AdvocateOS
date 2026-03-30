@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="240" fill="#0a0a0a" stroke="#c8ff00" stroke-width="8"/>
+  <!-- Shield body -->
+  <path d="M256 80 L400 160 L400 300 Q400 420 256 460 Q112 420 112 300 L112 160 Z" 
+        fill="#111111" stroke="#c8ff00" stroke-width="6"/>
+  <!-- Inner shield glow -->
+  <path d="M256 110 L375 178 L375 292 Q375 396 256 432 Q137 396 137 292 L137 178 Z" 
+        fill="#0d0d0d"/>
+  <!-- Scale of justice - left arm -->
+  <line x1="200" y1="240" x2="256" y2="200" stroke="#c8ff00" stroke-width="5" stroke-linecap="round"/>
+  <!-- Scale of justice - right arm -->
+  <line x1="312" y1="240" x2="256" y2="200" stroke="#c8ff00" stroke-width="5" stroke-linecap="round"/>
+  <!-- Scale center pole -->
+  <line x1="256" y1="180" x2="256" y2="340" stroke="#c8ff00" stroke-width="5" stroke-linecap="round"/>
+  <!-- Scale base -->
+  <line x1="220" y1="340" x2="292" y2="340" stroke="#c8ff00" stroke-width="5" stroke-linecap="round"/>
+  <!-- Scale top -->
+  <circle cx="256" cy="190" r="10" fill="#c8ff00"/>
+  <!-- Left pan -->
+  <path d="M175 240 Q175 270 200 270 Q225 270 225 240" stroke="#c8ff00" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <!-- Right pan -->
+  <path d="M287 240 Q287 270 312 270 Q337 270 337 240" stroke="#c8ff00" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <!-- Left pan chains -->
+  <line x1="200" y1="240" x2="175" y2="240" stroke="#c8ff00" stroke-width="3"/>
+  <line x1="200" y1="240" x2="225" y2="240" stroke="#c8ff00" stroke-width="3"/>
+  <!-- Right pan chains -->
+  <line x1="312" y1="240" x2="287" y2="240" stroke="#c8ff00" stroke-width="3"/>
+  <line x1="312" y1="240" x2="337" y2="240" stroke="#c8ff00" stroke-width="3"/>
+  <!-- AI circuit dots -->
+  <circle cx="170" cy="320" r="5" fill="#c8ff00" opacity="0.6"/>
+  <circle cx="342" cy="320" r="5" fill="#c8ff00" opacity="0.6"/>
+  <circle cx="200" cy="370" r="4" fill="#c8ff00" opacity="0.4"/>
+  <circle cx="312" cy="370" r="4" fill="#c8ff00" opacity="0.4"/>
+  <!-- Circuit lines -->
+  <line x1="170" y1="320" x2="200" y2="370" stroke="#c8ff00" stroke-width="2" opacity="0.3"/>
+  <line x1="342" y1="320" x2="312" y2="370" stroke="#c8ff00" stroke-width="2" opacity="0.3"/>
+</svg>

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Shield, Wallet, ArrowRight, Zap, ChevronDown, ExternalLink } from 'lucide-react'
+import { Wallet, ArrowRight, Zap, ChevronDown, ExternalLink } from 'lucide-react'
 import { useWallet } from '../context/WalletContext'
 
 function FallbackWalletIcon() {
@@ -38,8 +38,8 @@ export default function ConnectPage() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-sm bg-core border border-edge mb-5">
-            <Shield className="w-8 h-8 text-acid" />
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full overflow-hidden mb-5">
+            <img src="/logo_png.jpg" alt="AdvocateOS" className="w-16 h-16" />
           </div>
           <h1 className="text-3xl font-extrabold text-signal tracking-tight mb-2">AdvocateOS</h1>
           <p className="text-sm text-ghost max-w-xs mx-auto leading-relaxed">
