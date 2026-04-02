@@ -15,7 +15,22 @@ from flask_cors import CORS
 
 # ── CONFIG ──
 
-CONTRACT_ADDRESS = os.environ.get("AOS_CONTRACT", "0x6E7694c3ffbB4b109b2A37D009cE29425039E9da")
+NETWORKS = {
+    "bradbury": {
+        "contract": os.environ.get("AOS_CONTRACT_BRADBURY",
+                                   os.environ.get("AOS_CONTRACT", "0x6E7694c3ffbB4b109b2A37D009cE29425039E9da")),
+        "cli_network": "testnet-bradbury",
+        "label": "Bradbury Testnet",
+    },
+    "studionet": {
+        "contract": os.environ.get("AOS_CONTRACT_STUDIONET", "0x5b1C73fb7F1df7081126bF473eB40FfE77F05DFb"),
+        "cli_network": "studionet",
+        "label": "Studionet",
+    },
+}
+
+DEFAULT_NETWORK = os.environ.get("AOS_DEFAULT_NETWORK", "bradbury")
+CONTRACT_ADDRESS = NETWORKS[DEFAULT_NETWORK]["contract"]
 GL_PATH = os.environ.get("AOS_GL_PATH") or shutil.which("genlayer")
 WRITE_TIMEOUT = int(os.environ.get("AOS_WRITE_TIMEOUT", "600"))
 READ_TIMEOUT = int(os.environ.get("AOS_READ_TIMEOUT", "60"))
@@ -47,8 +62,37 @@ CORS(app, resources={r"/api/*": {"origins": ALLOWED_ORIGINS}})
 
 # ── GENLAYER CLI HELPERS ──
 
-def gl_call(method, *args):
-    cmd = [GL_PATH, "call", CONTRACT_ADDRESS, method]
+def _resolve_network():
+    """Get network key from ?network= query param, default to DEFAULT_NETWORK."""
+    net = request.args.get("network", DEFAULT_NETWORK).lower()
+    if net not in NETWORKS:
+        net = DEFAULT_NETWORK
+    return net
+
+
+def _get_contract(network=None):
+    """Return contract address for the given network."""
+    net = network or DEFAULT_NETWORK
+    return NETWORKS[net]["contract"]
+
+
+def _switch_network(network):
+    """Switch GenLayer CLI to the target network before a call."""
+    target = NETWORKS.get(network, NETWORKS[DEFAULT_NETWORK])
+    cmd = [GL_PATH, "config", "set", "--network", target["cli_network"]]
+    try:
+        subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+    except Exception:
+        pass
+
+
+def gl_call(method, *args, network=None):
+    net = network or DEFAULT_NETWORK
+    contract = _get_contract(net)
+    if not contract:
+        return None
+    _switch_network(net)
+    cmd = [GL_PATH, "call", contract, method]
     for a in args:
         cmd += ["--args", str(a)]
     try:
@@ -62,8 +106,13 @@ def gl_call(method, *args):
     return None
 
 
-def gl_write(method, *args):
-    cmd = [GL_PATH, "write", CONTRACT_ADDRESS, method]
+def gl_write(method, *args, network=None):
+    net = network or DEFAULT_NETWORK
+    contract = _get_contract(net)
+    if not contract:
+        return False
+    _switch_network(net)
+    cmd = [GL_PATH, "write", contract, method]
     for a in args:
         cmd += ["--args", str(a)]
     try:
@@ -73,11 +122,11 @@ def gl_write(method, *args):
             r.stdin.write((KEYSTORE_PASSWORD + "\n").encode())
             r.stdin.flush()
         # Don't wait for consensus — return immediately after submitting
-        # The transaction hash appears quickly, consensus takes minutes
         import time
-        time.sleep(5)  # Give it a moment to submit the tx
+        time.sleep(5)
         return True
     except Exception:
+        return False
         return False
 
 
@@ -246,20 +295,32 @@ def resolve(case_id):
     return redirect(url_for("case_detail", case_id=case_id))
 
 
+@app.route("/api/networks")
+def api_networks():
+    """Return available networks and current default."""
+    nets = {}
+    for k, v in NETWORKS.items():
+        nets[k] = {"label": v["label"], "hasContract": bool(v["contract"])}
+    return jsonify({"networks": nets, "default": DEFAULT_NETWORK})
+
+
 @app.route("/api/stats")
 def api_stats():
-    return jsonify(gl_call("get_stats") or {})
+    net = _resolve_network()
+    return jsonify(gl_call("get_stats", network=net) or {})
 
 
 @app.route("/api/accounts")
 def api_accounts():
-    return jsonify(gl_call("get_all_accounts") or [])
+    net = _resolve_network()
+    return jsonify(gl_call("get_all_accounts", network=net) or [])
 
 
 @app.route("/api/wallet/<address>")
 def api_wallet_accounts(address):
     """Check if a wallet address has any registered accounts."""
-    all_accounts = gl_call("get_all_accounts") or []
+    net = _resolve_network()
+    all_accounts = gl_call("get_all_accounts", network=net) or []
     matched = [
         a for a in all_accounts
         if isinstance(a, dict) and a.get("wallet_address", "").lower() == address.lower()
@@ -269,16 +330,18 @@ def api_wallet_accounts(address):
 
 @app.route("/api/cases/open")
 def api_open_cases():
-    return jsonify(gl_call("get_open_cases") or [])
+    net = _resolve_network()
+    return jsonify(gl_call("get_open_cases", network=net) or [])
 
 
 @app.route("/api/cases")
 def api_all_cases():
-    stats = gl_call("get_stats") or {}
+    net = _resolve_network()
+    stats = gl_call("get_stats", network=net) or {}
     total = stats.get("total_violations", 0)
     cases = []
     for i in range(1, total + 1):
-        c = gl_call("get_case", str(i))
+        c = gl_call("get_case", str(i), network=net)
         if c and isinstance(c, dict):
             cases.append(c)
     return jsonify(cases)
@@ -286,7 +349,8 @@ def api_all_cases():
 
 @app.route("/api/case/<int:case_id>")
 def api_case(case_id):
-    case = gl_call("get_case", str(case_id))
+    net = _resolve_network()
+    case = gl_call("get_case", str(case_id), network=net)
     if not case or not isinstance(case, dict):
         return jsonify({"error": "not found"}), 404
     return jsonify(case)
@@ -294,12 +358,14 @@ def api_case(case_id):
 
 @app.route("/api/case/<int:case_id>/path")
 def api_case_path(case_id):
-    return jsonify(gl_call("get_escalation_path", str(case_id)) or {})
+    net = _resolve_network()
+    return jsonify(gl_call("get_escalation_path", str(case_id), network=net) or {})
 
 
 @app.route("/api/register", methods=["POST"])
 def api_register():
     d = request.get_json(force=True) or {}
+    net = d.get("network", DEFAULT_NETWORK)
     name = d.get("name", "").strip()
     institution = d.get("institution", "").strip()
     ref = d.get("ref", "").strip()
@@ -309,13 +375,14 @@ def api_register():
     chain = d.get("chain", "")
     if not all([name, institution, ref, atype]):
         return jsonify({"ok": False, "error": "missing fields"}), 400
-    ok = gl_write("register_account", name, institution, ref, atype, jur, wallet, chain)
+    ok = gl_write("register_account", name, institution, ref, atype, jur, wallet, chain, network=net)
     return jsonify({"ok": ok})
 
 
 @app.route("/api/report", methods=["POST"])
 def api_report():
     d = request.get_json(force=True) or {}
+    net = d.get("network", DEFAULT_NETWORK)
     aid = d.get("account_id", "")
     vtype = d.get("violation_type", "")
     desc = d.get("description", "").strip()
@@ -323,28 +390,33 @@ def api_report():
     severity = d.get("severity", "3")
     if not all([aid, vtype, desc]):
         return jsonify({"ok": False, "error": "missing fields"}), 400
-    ok = gl_write("report_violation", str(aid), vtype, desc, str(amount), str(severity))
+    ok = gl_write("report_violation", str(aid), vtype, desc, str(amount), str(severity), network=net)
     return jsonify({"ok": ok})
 
 
 @app.route("/api/draft/<int:case_id>", methods=["POST"])
 def api_draft(case_id):
-    ok = gl_write("draft_complaint", str(case_id))
+    d = request.get_json(force=True) or {}
+    net = d.get("network", DEFAULT_NETWORK)
+    ok = gl_write("draft_complaint", str(case_id), network=net)
     return jsonify({"ok": ok})
 
 
 @app.route("/api/escalate/<int:case_id>", methods=["POST"])
 def api_escalate(case_id):
-    ok = gl_write("escalate", str(case_id))
+    d = request.get_json(force=True) or {}
+    net = d.get("network", DEFAULT_NETWORK)
+    ok = gl_write("escalate", str(case_id), network=net)
     return jsonify({"ok": ok})
 
 
 @app.route("/api/resolve/<int:case_id>", methods=["POST"])
 def api_resolve(case_id):
     d = request.get_json(force=True) or {}
+    net = d.get("network", DEFAULT_NETWORK)
     note = d.get("note", "").strip()
     amount = d.get("amount", "0")
-    ok = gl_write("resolve_case", str(case_id), note, str(amount))
+    ok = gl_write("resolve_case", str(case_id), note, str(amount), network=net)
     return jsonify({"ok": ok})
 
 

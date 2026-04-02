@@ -1,16 +1,31 @@
 import { useState, useRef, useEffect } from 'react'
-import { Wallet, LogOut, Copy, Check } from 'lucide-react'
+import { Wallet, LogOut, Copy, Check, ChevronDown } from 'lucide-react'
 import { useWallet } from '../context/WalletContext'
+import { getNetwork, setNetwork, fetchNetworks } from '../api'
+
+const NET_LABELS = {
+  bradbury: 'Bradbury Testnet',
+  studionet: 'Studionet',
+}
 
 export default function WalletBar() {
   const { wallet, role, disconnect } = useWallet()
   const [open, setOpen] = useState(false)
+  const [netOpen, setNetOpen] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [network, setNet] = useState(getNetwork())
+  const [networks, setNetworks] = useState({})
   const ref = useRef(null)
+  const netRef = useRef(null)
+
+  useEffect(() => {
+    fetchNetworks().then((d) => setNetworks(d.networks || {}))
+  }, [])
 
   useEffect(() => {
     const handler = (e) => {
       if (ref.current && !ref.current.contains(e.target)) setOpen(false)
+      if (netRef.current && !netRef.current.contains(e.target)) setNetOpen(false)
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
@@ -22,9 +37,61 @@ export default function WalletBar() {
     setTimeout(() => setCopied(false), 1500)
   }
 
+  const switchNetwork = (key) => {
+    setNetwork(key)
+    setNet(key)
+    setNetOpen(false)
+    window.location.reload()
+  }
+
   return (
     <div className="sticky top-0 z-40 border-b border-edge bg-void/80 backdrop-blur-sm">
-      <div className="flex items-center justify-end px-6 h-12">
+      <div className="flex items-center justify-end gap-3 px-6 h-12">
+
+        {/* Network selector */}
+        <div className="relative" ref={netRef}>
+          <button
+            onClick={() => setNetOpen(!netOpen)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm border border-edge bg-core hover:border-muted transition-colors"
+          >
+            <div className={`w-1.5 h-1.5 rounded-full ${network === 'bradbury' ? 'bg-signal' : 'bg-acid'}`} />
+            <span className="font-mono text-xs text-ghost">
+              {NET_LABELS[network] || network}
+            </span>
+            <ChevronDown className="w-3 h-3 text-muted" />
+          </button>
+          {netOpen && (
+            <div className="absolute right-0 top-full mt-1.5 w-48 card p-2 shadow-xl shadow-black/40">
+              {Object.keys(networks).length > 0
+                ? Object.entries(networks).map(([key, cfg]) => (
+                    <button
+                      key={key}
+                      onClick={() => switchNetwork(key)}
+                      className={`w-full text-left px-3 py-2 rounded-sm font-mono text-xs transition-colors flex items-center gap-2
+                        ${key === network ? 'bg-surface text-valid' : 'text-ghost hover:bg-surface/50'}`}
+                    >
+                      <div className={`w-1.5 h-1.5 rounded-full ${key === 'bradbury' ? 'bg-signal' : 'bg-acid'}`} />
+                      {NET_LABELS[key] || key}
+                      {key === network && <Check className="w-3 h-3 ml-auto" />}
+                    </button>
+                  ))
+                : ['bradbury', 'studionet'].map((key) => (
+                    <button
+                      key={key}
+                      onClick={() => switchNetwork(key)}
+                      className={`w-full text-left px-3 py-2 rounded-sm font-mono text-xs transition-colors flex items-center gap-2
+                        ${key === network ? 'bg-surface text-valid' : 'text-ghost hover:bg-surface/50'}`}
+                    >
+                      <div className={`w-1.5 h-1.5 rounded-full ${key === 'bradbury' ? 'bg-signal' : 'bg-acid'}`} />
+                      {NET_LABELS[key]}
+                      {key === network && <Check className="w-3 h-3 ml-auto" />}
+                    </button>
+                  ))}
+            </div>
+          )}
+        </div>
+
+        {/* Wallet dropdown */}
         <div className="relative" ref={ref}>
           <button
             onClick={() => setOpen(!open)}
