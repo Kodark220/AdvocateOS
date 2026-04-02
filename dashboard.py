@@ -148,7 +148,7 @@ def gl_write(method, *args, network=None):
         # Don't wait for full consensus — just confirm submission
         try:
             stdout, stderr = r.communicate(timeout=30)
-            output = stdout + stderr
+            output = (stdout + stderr).decode("utf-8", errors="replace")
             if "Transaction Hash" in output:
                 logging.info("gl_write %s on %s: tx submitted", method, net)
                 return True
