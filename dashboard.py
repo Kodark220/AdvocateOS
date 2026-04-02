@@ -19,11 +19,13 @@ NETWORKS = {
     "bradbury": {
         "contract": os.environ.get("AOS_CONTRACT_BRADBURY",
                                    os.environ.get("AOS_CONTRACT", "0x6E7694c3ffbB4b109b2A37D009cE29425039E9da")),
+        "rpc": "https://rpc-bradbury.genlayer.com",
         "cli_network": "testnet-bradbury",
         "label": "Bradbury Testnet",
     },
     "studionet": {
         "contract": os.environ.get("AOS_CONTRACT_STUDIONET", "0x5b1C73fb7F1df7081126bF473eB40FfE77F05DFb"),
+        "rpc": "https://studio.genlayer.com/api",
         "cli_network": "studionet",
         "label": "Studionet",
     },
@@ -76,23 +78,19 @@ def _get_contract(network=None):
     return NETWORKS[net]["contract"]
 
 
-def _switch_network(network):
-    """Switch GenLayer CLI to the target network before a call."""
-    target = NETWORKS.get(network, NETWORKS[DEFAULT_NETWORK])
-    cmd = [GL_PATH, "network", "set", target["cli_network"]]
-    try:
-        subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-    except Exception:
-        pass
+def _get_rpc(network=None):
+    """Return RPC URL for the given network."""
+    net = network or DEFAULT_NETWORK
+    return NETWORKS[net]["rpc"]
 
 
 def gl_call(method, *args, network=None):
     net = network or DEFAULT_NETWORK
     contract = _get_contract(net)
+    rpc = _get_rpc(net)
     if not contract:
         return None
-    _switch_network(net)
-    cmd = [GL_PATH, "call", contract, method]
+    cmd = [GL_PATH, "call", "--rpc", rpc, contract, method]
     for a in args:
         cmd += ["--args", str(a)]
     try:
@@ -101,6 +99,8 @@ def gl_call(method, *args, network=None):
             s = line.strip()
             if s.startswith("{") or s.startswith("["):
                 return json.loads(s)
+    except subprocess.TimeoutExpired:
+        pass
     except Exception:
         pass
     return None
@@ -109,10 +109,10 @@ def gl_call(method, *args, network=None):
 def gl_write(method, *args, network=None):
     net = network or DEFAULT_NETWORK
     contract = _get_contract(net)
+    rpc = _get_rpc(net)
     if not contract:
         return False
-    _switch_network(net)
-    cmd = [GL_PATH, "write", contract, method]
+    cmd = [GL_PATH, "write", "--rpc", rpc, contract, method]
     for a in args:
         cmd += ["--args", str(a)]
     try:
@@ -126,7 +126,6 @@ def gl_write(method, *args, network=None):
         time.sleep(5)
         return True
     except Exception:
-        return False
         return False
 
 
