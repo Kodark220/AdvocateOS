@@ -13,7 +13,7 @@ export default function NetworkBanner({ message }) {
 
   const switchTo = () => {
     setNetwork(other)
-    window.location.reload()
+    window.location.href = '/'
   }
 
   return (
