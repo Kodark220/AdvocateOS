@@ -51,6 +51,11 @@ export default function Accounts() {
   }
 
   useEffect(() => { load() }, [])
+  useEffect(() => {
+    const h = () => load()
+    window.addEventListener('networkChanged', h)
+    return () => window.removeEventListener('networkChanged', h)
+  }, [])
 
   const handleSubmit = async (e) => {
     e.preventDefault()

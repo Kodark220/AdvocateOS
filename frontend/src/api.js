@@ -10,6 +10,7 @@ export function getNetwork() {
 export function setNetwork(net) {
   currentNetwork = net;
   localStorage.setItem('aos_network', net);
+  window.dispatchEvent(new CustomEvent('networkChanged', { detail: net }));
 }
 
 function withNetwork(url) {

@@ -20,15 +20,20 @@ export default function ReportPage() {
     account_id: '', violation_type: VIOLATIONS[0], description: '', amount: '0', severity: '3',
   })
 
+  const loadAccounts = async () => {
+    setLoading(true)
+    const all = await fetchAccounts()
+    const mine = all.filter(a => a.wallet_address && a.wallet_address.toLowerCase() === wallet.toLowerCase())
+    setAccounts(mine)
+    if (mine.length > 0) setForm(f => ({ ...f, account_id: String(mine[0].id) }))
+    setLoading(false)
+  }
+
+  useEffect(() => { loadAccounts() }, [wallet])
   useEffect(() => {
-    (async () => {
-      setLoading(true)
-      const all = await fetchAccounts()
-      const mine = all.filter(a => a.wallet_address && a.wallet_address.toLowerCase() === wallet.toLowerCase())
-      setAccounts(mine)
-      if (mine.length > 0) setForm(f => ({ ...f, account_id: String(mine[0].id) }))
-      setLoading(false)
-    })()
+    const h = () => loadAccounts()
+    window.addEventListener('networkChanged', h)
+    return () => window.removeEventListener('networkChanged', h)
   }, [wallet])
 
   const handleSubmit = async (e) => {

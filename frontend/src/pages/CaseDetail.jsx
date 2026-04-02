@@ -33,6 +33,11 @@ export default function CaseDetail() {
   }
 
   useEffect(() => { load() }, [id])
+  useEffect(() => {
+    const h = () => load()
+    window.addEventListener('networkChanged', h)
+    return () => window.removeEventListener('networkChanged', h)
+  }, [id])
 
   const handleDraft = async () => {
     setActing('draft')

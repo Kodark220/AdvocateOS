@@ -27,6 +27,11 @@ export default function UserDashboard() {
   }
 
   useEffect(() => { load() }, [])
+  useEffect(() => {
+    const h = () => load()
+    window.addEventListener('networkChanged', h)
+    return () => window.removeEventListener('networkChanged', h)
+  }, [])
 
   // Filter to user's accounts and cases
   const myAccounts = accounts.filter(

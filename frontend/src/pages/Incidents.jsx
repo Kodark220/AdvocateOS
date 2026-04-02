@@ -33,6 +33,11 @@ export default function Incidents() {
   }
 
   useEffect(() => { load() }, [])
+  useEffect(() => {
+    const h = () => load()
+    window.addEventListener('networkChanged', h)
+    return () => window.removeEventListener('networkChanged', h)
+  }, [])
 
   const handleReport = async (e) => {
     e.preventDefault()

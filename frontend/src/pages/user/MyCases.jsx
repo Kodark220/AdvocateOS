@@ -23,6 +23,11 @@ export default function MyCases() {
   }
 
   useEffect(() => { load() }, [])
+  useEffect(() => {
+    const h = () => load()
+    window.addEventListener('networkChanged', h)
+    return () => window.removeEventListener('networkChanged', h)
+  }, [])
 
   const myAccountIds = new Set(
     accounts

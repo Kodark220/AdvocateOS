@@ -29,6 +29,11 @@ export default function Dashboard() {
   }
 
   useEffect(() => { load() }, [])
+  useEffect(() => {
+    const h = () => load()
+    window.addEventListener('networkChanged', h)
+    return () => window.removeEventListener('networkChanged', h)
+  }, [])
 
   const total = stats.total_violations || 0
   const resolved = stats.total_resolved || 0

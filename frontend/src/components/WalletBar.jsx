@@ -57,7 +57,6 @@ export default function WalletBar() {
     setNetwork(key)
     setNet(key)
     setNetOpen(false)
-    window.location.href = '/'
   }
 
   return (
