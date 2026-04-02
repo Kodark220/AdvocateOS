@@ -1,8 +1,19 @@
 import { Link2 } from 'lucide-react'
+import { getNetwork } from '../api'
 
-const CONTRACT = '0x6E7694c3ffbB4b109b2A37D009cE29425039E9da'
+const CONTRACTS = {
+  bradbury: '0x6E7694c3ffbB4b109b2A37D009cE29425039E9da',
+  studionet: '0x5b1C73fb7F1df7081126bF473eB40FfE77F05DFb',
+}
+
+const NET_LABELS = {
+  bradbury: 'GenLayer Bradbury Testnet',
+  studionet: 'GenLayer Studionet',
+}
 
 export default function Settings() {
+  const network = getNetwork()
+  const contract = CONTRACTS[network] || CONTRACTS.studionet
   return (
     <div className="min-h-screen grid-bg">
       {/* Top bar */}
@@ -22,13 +33,13 @@ export default function Settings() {
           <div className="space-y-3">
             <div>
               <div className="label-field">Contract Address</div>
-              <div className="font-mono text-xs text-ghost break-all">{CONTRACT}</div>
+              <div className="font-mono text-xs text-ghost break-all">{contract}</div>
             </div>
             <div>
               <div className="label-field">Network</div>
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-valid" />
-                <span className="font-mono text-xs text-ghost">GenLayer Bradbury Testnet</span>
+                <span className="font-mono text-xs text-ghost">{NET_LABELS[network] || network}</span>
               </div>
             </div>
             <div>

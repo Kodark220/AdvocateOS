@@ -3,6 +3,10 @@
     {
       "source": "/api/:path*",
       "destination": "http://79.76.62.48:5000/api/:path*"
+    },
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
     }
   ]
 }

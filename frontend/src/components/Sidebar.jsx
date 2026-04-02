@@ -1,6 +1,12 @@
 import { NavLink } from 'react-router-dom'
 import { LayoutDashboard, Users, ShieldAlert, Settings, FileText, AlertTriangle, UserPlus, LogOut } from 'lucide-react'
 import { useWallet } from '../context/WalletContext'
+import { getNetwork } from '../api'
+
+const NET_LABELS = {
+  bradbury: 'Bradbury Testnet',
+  studionet: 'Studionet',
+}
 
 const adminLinks = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -79,7 +85,7 @@ export default function Sidebar() {
           Built on GenLayer
         </div>
         <div className="mt-1 inline-block px-2 py-0.5 bg-surface rounded-sm font-mono text-[9px] text-muted">
-          Bradbury Testnet
+          {NET_LABELS[getNetwork()] || getNetwork()}
         </div>
       </div>
     </aside>

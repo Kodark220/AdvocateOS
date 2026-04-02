@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Plus, Trash2, Wallet, Globe, RefreshCw, Search, CheckCircle, XCircle } from 'lucide-react'
-import { fetchAccounts, registerAccount } from '../api'
+import { fetchAccounts, registerAccount, fetchWalletAccounts } from '../api'
 
 const CHAINS = [
   'ethereum', 'base', 'solana', 'polygon', 'arbitrum',
@@ -36,13 +36,8 @@ export default function Accounts() {
     setLookupError('')
     setLookupResult(null)
     try {
-      const r = await fetch(`/api/wallet/${addr}`)
-      if (r.ok) {
-        const data = await r.json()
-        setLookupResult(data)
-      } else {
-        setLookupError('Failed to check wallet')
-      }
+      const data = await fetchWalletAccounts(addr)
+      setLookupResult(data)
     } catch {
       setLookupError('Network error')
     }

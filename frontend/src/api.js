@@ -1,7 +1,7 @@
 const API = import.meta.env.VITE_API_URL || '/api';
 
 // ── Network state ──
-let currentNetwork = localStorage.getItem('aos_network') || 'bradbury';
+let currentNetwork = localStorage.getItem('aos_network') || 'studionet';
 
 export function getNetwork() {
   return currentNetwork;
