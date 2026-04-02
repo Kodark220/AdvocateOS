@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { UserPlus, Building, Globe } from 'lucide-react'
 import { useWallet } from '../../context/WalletContext'
 import { registerAccount } from '../../api'
+import { createWriteClient, getContractAddress, getChainName } from '../../glClient'
+import { TransactionStatus } from 'genlayer-js/types'
 
 const CHAINS = [
   'ethereum', 'base', 'solana', 'polygon', 'arbitrum',
@@ -10,9 +12,10 @@ const CHAINS = [
 ]
 
 export default function RegisterPage() {
-  const { wallet, username } = useWallet()
+  const { wallet, username, markRegistered } = useWallet()
   const navigate = useNavigate()
   const [submitting, setSubmitting] = useState(false)
+  const [status, setStatus] = useState('')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const [form, setForm] = useState({
@@ -24,12 +27,65 @@ export default function RegisterPage() {
     e.preventDefault()
     setSubmitting(true)
     setError('')
-    const res = await registerAccount({ ...form, wallet })
-    if (res.ok) {
-      setSuccess(true)
-      setTimeout(() => navigate('/'), 1500)
-    } else {
-      setError(res.error || 'Registration failed. Please try again.')
+    setStatus('')
+
+    // Try wallet-signed direct contract write first
+    if (window.ethereum && wallet) {
+      try {
+        setStatus('Switching wallet to GenLayer network...')
+        const client = createWriteClient(wallet, window.ethereum)
+        await client.connect(getChainName())
+
+        setStatus('Please confirm the transaction in your wallet...')
+        const txHash = await client.writeContract({
+          address: getContractAddress(),
+          functionName: 'register_account',
+          args: [
+            form.name,
+            form.institution,
+            form.ref,
+            form.atype,
+            form.jurisdiction,
+            wallet,
+            form.chain || '',
+          ],
+          value: BigInt(0),
+        })
+
+        setStatus('Transaction submitted! Waiting for confirmation...')
+        await client.waitForTransactionReceipt({
+          hash: txHash,
+          status: TransactionStatus.ACCEPTED,
+        })
+
+        markRegistered(form.name)
+        setSuccess(true)
+        setTimeout(() => navigate('/'), 1500)
+        setSubmitting(false)
+        return
+      } catch (err) {
+        if (err.code === 4001) {
+          setError('Transaction rejected. Please approve in your wallet to register.')
+          setSubmitting(false)
+          return
+        }
+        console.warn('Direct wallet write failed, falling back to backend:', err.message)
+      }
+    }
+
+    // Fallback: use backend API
+    setStatus('Registering via backend...')
+    try {
+      const res = await registerAccount({ ...form, wallet })
+      if (res.ok) {
+        markRegistered(form.name)
+        setSuccess(true)
+        setTimeout(() => navigate('/'), 1500)
+      } else {
+        setError(res.error || 'Registration failed. Please try again.')
+      }
+    } catch {
+      setError('Registration failed. Server may be unreachable.')
     }
     setSubmitting(false)
   }
@@ -146,6 +202,12 @@ export default function RegisterPage() {
             <div className="font-mono text-[10px] uppercase tracking-widest text-muted mb-1">Linked Wallet</div>
             <div className="font-mono text-xs text-ghost break-all">{wallet}</div>
           </div>
+
+          {status && submitting && (
+            <div className="mb-3 px-3 py-2 rounded-sm border border-signal/20 bg-signal/5">
+              <p className="font-mono text-xs text-signal">{status}</p>
+            </div>
+          )}
 
           <button type="submit" className="btn-primary w-full text-sm" disabled={submitting}>
             {submitting ? (
