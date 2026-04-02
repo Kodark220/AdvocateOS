@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ShieldAlert, FileText, AlertTriangle, Wallet, RefreshCw, ChevronRight, Activity, UserPlus } from 'lucide-react'
+import { ShieldAlert, FileText, AlertTriangle, RefreshCw, ChevronRight, Activity, UserPlus, Wallet } from 'lucide-react'
 import { fetchStats, fetchAccounts, fetchAllCases, isNetworkError } from '../../api'
 import { useWallet } from '../../context/WalletContext'
 import StatusBadge from '../../components/StatusBadge'
@@ -40,22 +40,6 @@ export default function UserDashboard() {
 
   return (
     <div className="min-h-screen grid-bg">
-      {/* Top bar */}
-      <div className="sticky top-0 z-40 border-b border-edge bg-void/80 backdrop-blur-sm">
-        <div className="flex items-center justify-between px-6 h-14">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5">
-              <div className="w-1.5 h-1.5 rounded-full bg-valid animate-pulse" />
-              <span className="font-mono text-xs text-ghost">Connected</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Wallet className="w-3.5 h-3.5 text-ghost" />
-            <span className="font-mono text-xs text-muted">{wallet.slice(0, 8)}...{wallet.slice(-6)}</span>
-          </div>
-        </div>
-      </div>
-
       <NetworkBanner message={networkError} />
 
       <div className="px-6 py-6 max-w-[1200px] mx-auto">

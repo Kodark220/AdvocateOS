@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ShieldAlert, CheckCircle, DollarSign, TrendingUp, RefreshCw, ChevronRight, Activity, Wallet, Users } from 'lucide-react'
+import { ShieldAlert, CheckCircle, DollarSign, TrendingUp, RefreshCw, ChevronRight, Activity, Users } from 'lucide-react'
 import { fetchStats, fetchAccounts, fetchAllCases, isNetworkError } from '../api'
-import { useWallet } from '../context/WalletContext'
 import StatusBadge from '../components/StatusBadge'
 import NetworkBanner from '../components/NetworkBanner'
 
@@ -15,8 +14,6 @@ export default function Dashboard() {
   const [tab, setTab] = useState('ALL')
   const [loading, setLoading] = useState(true)
   const [networkError, setNetworkError] = useState(null)
-
-  const { wallet } = useWallet()
 
   const load = async () => {
     setLoading(true)
@@ -54,23 +51,6 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen grid-bg">
-      {/* Top bar */}
-      <div className="sticky top-0 z-40 border-b border-edge bg-void/80 backdrop-blur-sm">
-        <div className="flex items-center justify-between px-6 h-14">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5">
-              <div className="w-1.5 h-1.5 rounded-full bg-valid animate-pulse" />
-              <span className="font-mono text-xs text-ghost">Agent Active</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Wallet className="w-3.5 h-3.5 text-valid" />
-            <span className="font-mono text-xs text-ghost">{wallet.slice(0, 8)}...{wallet.slice(-6)}</span>
-            <span className="tag-burn text-[9px]">ADMIN</span>
-          </div>
-        </div>
-      </div>
-
       <NetworkBanner message={networkError} />
 
       <div className="px-6 py-6 max-w-[1400px] mx-auto">
