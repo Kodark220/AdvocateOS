@@ -79,7 +79,7 @@ def _get_contract(network=None):
 def _switch_network(network):
     """Switch GenLayer CLI to the target network before a call."""
     target = NETWORKS.get(network, NETWORKS[DEFAULT_NETWORK])
-    cmd = [GL_PATH, "config", "set", "--network", target["cli_network"]]
+    cmd = [GL_PATH, "network", "set", target["cli_network"]]
     try:
         subprocess.run(cmd, capture_output=True, text=True, timeout=10)
     except Exception:
