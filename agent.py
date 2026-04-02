@@ -11,7 +11,7 @@ and autonomously handles the full lifecycle:
   5. REVIEW — Check institution responses, recommend resolve/escalate
 
 Runs as a long-lived process against the deployed AdvocateOS contract
-on GenLayer Bradbury testnet.
+on GenLayer Studionet.
 """
 
 import subprocess
@@ -21,13 +21,23 @@ import time
 import logging
 import os
 import sys
+try:
+    import fcntl
+except ImportError:
+    fcntl = None  # Windows — no file locking needed
 from datetime import datetime, timedelta
 
 import notifications
 
 # ── CONFIGURATION ──
 
-CONTRACT_ADDRESS = os.environ.get("AOS_CONTRACT", "0x6E7694c3ffbB4b109b2A37D009cE29425039E9da")
+CONTRACT_ADDRESS = os.environ.get(
+    "AOS_CONTRACT_STUDIONET",
+    os.environ.get("AOS_CONTRACT", "0x5b1C73fb7F1df7081126bF473eB40FfE77F05DFb"),
+)
+RPC_URL = os.environ.get("AOS_RPC_URL", "https://studio.genlayer.com/api")
+CLI_NETWORK = os.environ.get("AOS_CLI_NETWORK", "studionet")
+KEYSTORE_PASSWORD = os.environ.get("AOS_KEYSTORE_PASSWORD", "")
 GL_PATH = os.environ.get("AOS_GL_PATH") or shutil.which("genlayer")
 
 # How often the agent checks (seconds)
@@ -114,45 +124,70 @@ log = logging.getLogger("AdvocateOS-Agent")
 # ── GENLAYER CLI INTERFACE ──
 
 def gl_call(method: str, *args: str) -> dict | list | str | None:
-    """Call a view method on the contract. Returns parsed JSON or None."""
-    cmd = [GL_PATH, "call", CONTRACT_ADDRESS, method]
+    """Call a view method on the contract via CLI with --rpc."""
+    cmd = [GL_PATH, "call", "--rpc", RPC_URL, CONTRACT_ADDRESS, method]
     for a in args:
         cmd += ["--args", str(a)]
     try:
         r = subprocess.run(
             cmd, capture_output=True, text=True,
-            timeout=READ_TIMEOUT, shell=True,
+            timeout=READ_TIMEOUT,
         )
         for line in (r.stdout + r.stderr).split("\n"):
             s = line.strip()
             if s.startswith("{") or s.startswith("["):
                 return json.loads(s)
+    except subprocess.TimeoutExpired:
+        log.error("gl_call %s timed out after %ds", method, READ_TIMEOUT)
     except Exception as e:
         log.error("gl_call %s failed: %s", method, e)
     return None
 
 
 def gl_write(method: str, *args: str) -> bool:
-    """Send a write transaction. Returns True on success."""
-    cmd = [GL_PATH, "write", CONTRACT_ADDRESS, method]
+    """Send a write transaction with keystore password and file locking."""
+    cmd = [GL_PATH, "write", "--rpc", RPC_URL, CONTRACT_ADDRESS, method]
     for a in args:
         cmd += ["--args", str(a)]
     try:
-        r = subprocess.run(
-            cmd, capture_output=True, text=True,
-            timeout=WRITE_TIMEOUT, shell=True,
-        )
-        combined = r.stdout + r.stderr
-        if "successfully" in combined.lower():
+        lock_fd = None
+        if fcntl:
+            lock_fd = open("/tmp/genlayer_cli.lock", "w")
+            fcntl.flock(lock_fd, fcntl.LOCK_EX)
+        try:
+            # Switch to correct network for consensus
+            subprocess.run(
+                [GL_PATH, "network", "set", CLI_NETWORK],
+                capture_output=True, text=True, timeout=10,
+            )
+            r = subprocess.Popen(
+                cmd, stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            )
+            if KEYSTORE_PASSWORD:
+                r.stdin.write((KEYSTORE_PASSWORD + "\n").encode())
+                r.stdin.flush()
+        finally:
+            if lock_fd and fcntl:
+                fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                lock_fd.close()
+        try:
+            stdout, stderr = r.communicate(timeout=WRITE_TIMEOUT)
+            combined = (stdout + stderr).decode("utf-8", errors="replace")
+            if "Transaction Hash" in combined or "successfully" in combined.lower():
+                log.info("gl_write %s: tx submitted", method)
+                return True
+            if "DISAGREE" in combined:
+                log.warning("Validators DISAGREE on %s", method)
+            elif "not processed" in combined.lower():
+                log.warning("Transaction not processed: %s", method)
+            else:
+                log.warning("Write %s exit=%d: %s", method, r.returncode, combined[-300:])
+        except subprocess.TimeoutExpired:
+            log.info("Write %s: timeout waiting for consensus (tx likely submitted)", method)
+            r.kill()
+            r.communicate()
             return True
-        if "DISAGREE" in combined:
-            log.warning("Validators DISAGREE on %s", method)
-        elif "not processed" in combined.lower():
-            log.warning("Transaction not processed: %s", method)
-        else:
-            log.warning("Write %s exit=%d: %s", method, r.returncode, combined[-300:])
-    except subprocess.TimeoutExpired:
-        log.error("Write %s timed out after %ds", method, WRITE_TIMEOUT)
     except Exception as e:
         log.error("Write %s error: %s", method, e)
     return False
@@ -372,7 +407,7 @@ def print_banner():
     log.info("=" * 60)
     log.info("  AdvocateOS Agent — Autonomous Consumer Watchdog")
     log.info("  Contract: %s", CONTRACT_ADDRESS)
-    log.info("  Network:  Bradbury Testnet")
+    log.info("  Network:  %s (RPC: %s)", CLI_NETWORK, RPC_URL)
     if stats:
         log.info(
             "  Accounts: %d | Violations: %d | Escalations: %d | Resolved: %d",
