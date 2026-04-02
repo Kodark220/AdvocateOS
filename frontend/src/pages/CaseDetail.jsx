@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, RefreshCw, Send, ChevronUp, ChevronDown, FileText } from 'lucide-react'
 import { fetchCase, fetchEscalationPath, draftComplaint, escalateCase, resolveCase } from '../api'
+import { contractWrite } from '../glClient'
 import { useWallet } from '../context/WalletContext'
 import StatusBadge from '../components/StatusBadge'
 
@@ -12,12 +13,13 @@ const TIER_LABELS = {
 
 export default function CaseDetail() {
   const { id } = useParams()
-  const { role } = useWallet()
+  const { role, wallet } = useWallet()
   const isAdmin = role === 'admin'
   const [c, setCase] = useState(null)
   const [path, setPath] = useState(null)
   const [loading, setLoading] = useState(true)
   const [acting, setActing] = useState('')
+  const [actError, setActError] = useState('')
   const [resolveForm, setResolveForm] = useState({ note: '', amount: '0' })
   const [showComplaints, setShowComplaints] = useState(true)
 
@@ -41,14 +43,38 @@ export default function CaseDetail() {
 
   const handleDraft = async () => {
     setActing('draft')
-    await draftComplaint(id)
+    setActError('')
+    if (window.ethereum && wallet) {
+      try {
+        await contractWrite(wallet, 'draft_complaint', [Number(id)])
+        await load()
+        setActing('')
+        return
+      } catch (err) {
+        if (err.code === 4001) { setActError('Transaction rejected.'); setActing(''); return }
+        console.warn('Direct draft failed, falling back:', err.message)
+      }
+    }
+    try { await draftComplaint(id) } catch { setActError('Draft failed. Server may be offline.') }
     await load()
     setActing('')
   }
 
   const handleEscalate = async () => {
     setActing('escalate')
-    await escalateCase(id)
+    setActError('')
+    if (window.ethereum && wallet) {
+      try {
+        await contractWrite(wallet, 'escalate', [Number(id)])
+        await load()
+        setActing('')
+        return
+      } catch (err) {
+        if (err.code === 4001) { setActError('Transaction rejected.'); setActing(''); return }
+        console.warn('Direct escalate failed, falling back:', err.message)
+      }
+    }
+    try { await escalateCase(id) } catch { setActError('Escalation failed. Server may be offline.') }
     await load()
     setActing('')
   }
@@ -56,7 +82,23 @@ export default function CaseDetail() {
   const handleResolve = async (e) => {
     e.preventDefault()
     setActing('resolve')
-    await resolveCase(id, resolveForm)
+    setActError('')
+    if (window.ethereum && wallet) {
+      try {
+        await contractWrite(wallet, 'resolve_case', [
+          Number(id),
+          resolveForm.note,
+          Number(resolveForm.amount),
+        ])
+        await load()
+        setActing('')
+        return
+      } catch (err) {
+        if (err.code === 4001) { setActError('Transaction rejected.'); setActing(''); return }
+        console.warn('Direct resolve failed, falling back:', err.message)
+      }
+    }
+    try { await resolveCase(id, resolveForm) } catch { setActError('Resolve failed. Server may be offline.') }
     await load()
     setActing('')
   }
@@ -109,6 +151,11 @@ export default function CaseDetail() {
       </div>
 
       <div className="px-6 py-6 max-w-[1200px] mx-auto">
+        {actError && (
+          <div className="mb-4 px-3 py-2.5 rounded-sm border border-burn/20 bg-burn/5">
+            <p className="font-mono text-xs text-burn">{actError}</p>
+          </div>
+        )}
         {/* Case header card */}
         <div className="card p-6 mb-5">
           <h2 className="text-lg font-bold text-signal mb-2">

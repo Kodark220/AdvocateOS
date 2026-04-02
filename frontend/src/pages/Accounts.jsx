@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Plus, Trash2, Wallet, Globe, RefreshCw, Search, CheckCircle, XCircle } from 'lucide-react'
 import { fetchAccounts, registerAccount, fetchWalletAccounts } from '../api'
+import { contractWrite } from '../glClient'
+import { useWallet } from '../context/WalletContext'
 
 const CHAINS = [
   'ethereum', 'base', 'solana', 'polygon', 'arbitrum',
@@ -12,10 +14,12 @@ export default function Accounts() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [regError, setRegError] = useState('')
   const [form, setForm] = useState({
     name: '', institution: '', ref: '', atype: 'checking',
     jurisdiction: 'US', wallet: '', chain: '',
   })
+  const { wallet: connectedWallet } = useWallet()
 
   // Wallet lookup state
   const [lookupAddr, setLookupAddr] = useState('')
@@ -60,11 +64,45 @@ export default function Accounts() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     setSubmitting(true)
-    const res = await registerAccount(form)
-    if (res.ok) {
-      setForm({ name: '', institution: '', ref: '', atype: 'checking', jurisdiction: 'US', wallet: '', chain: '' })
-      setShowForm(false)
-      await load()
+    setRegError('')
+
+    const walletAddr = form.wallet || connectedWallet
+
+    // Try wallet-signed write first
+    if (window.ethereum && connectedWallet) {
+      try {
+        await contractWrite(connectedWallet, 'register_account', [
+          form.name,
+          form.institution,
+          form.ref,
+          form.atype,
+          form.jurisdiction,
+          walletAddr,
+          form.chain || '',
+        ])
+        setForm({ name: '', institution: '', ref: '', atype: 'checking', jurisdiction: 'US', wallet: '', chain: '' })
+        setShowForm(false)
+        await load()
+        setSubmitting(false)
+        return
+      } catch (err) {
+        if (err.code === 4001) { setRegError('Transaction rejected.'); setSubmitting(false); return }
+        console.warn('Direct write failed, falling back:', err.message)
+      }
+    }
+
+    // Fallback: backend
+    try {
+      const res = await registerAccount(form)
+      if (res.ok) {
+        setForm({ name: '', institution: '', ref: '', atype: 'checking', jurisdiction: 'US', wallet: '', chain: '' })
+        setShowForm(false)
+        await load()
+      } else {
+        setRegError(res.error || 'Registration failed.')
+      }
+    } catch {
+      setRegError('Registration failed. Server may be offline.')
     }
     setSubmitting(false)
   }
@@ -167,6 +205,11 @@ export default function Accounts() {
         {showForm && (
           <div className="card p-6 mb-6">
             <h2 className="text-sm font-bold text-signal mb-5">Register New Account</h2>
+            {regError && (
+              <div className="mb-4 px-3 py-2.5 rounded-sm border border-burn/20 bg-burn/5">
+                <p className="font-mono text-xs text-burn">{regError}</p>
+              </div>
+            )}
             <form onSubmit={handleSubmit}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div>

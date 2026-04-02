@@ -1,5 +1,6 @@
 import { createClient } from 'genlayer-js'
 import { studionet, testnetBradbury } from 'genlayer-js/chains'
+import { TransactionStatus } from 'genlayer-js/types'
 import { getNetwork } from './api'
 
 const CONTRACTS = {
@@ -25,6 +26,10 @@ export function getChain(net) {
   return CHAINS[net || getNetwork()] || studionet
 }
 
+export function getChainName(net) {
+  return CHAIN_NAMES[net || getNetwork()] || 'studionet'
+}
+
 export function createReadClient(net) {
   return createClient({ chain: getChain(net) })
 }
@@ -38,6 +43,35 @@ export function createWriteClient(walletAddress, provider) {
   })
 }
 
-export function getChainName(net) {
-  return CHAIN_NAMES[net || getNetwork()] || 'studionet'
+// ── Direct contract read (returns parsed JSON or null) ──
+export async function contractRead(fn, args = []) {
+  try {
+    const client = createReadClient()
+    const raw = await client.readContract({
+      address: getContractAddress(),
+      functionName: fn,
+      args,
+    })
+    return typeof raw === 'string' ? JSON.parse(raw) : raw
+  } catch (e) {
+    console.warn(`Contract read ${fn} failed:`, e.message)
+    return null
+  }
+}
+
+// ── Wallet-signed contract write (pops MetaMask) ──
+export async function contractWrite(wallet, functionName, args) {
+  if (!window.ethereum || !wallet) throw new Error('No wallet available')
+  const client = createWriteClient(wallet, window.ethereum)
+  await client.connect(getChainName())
+  const txHash = await client.writeContract({
+    address: getContractAddress(),
+    functionName,
+    args,
+    value: BigInt(0),
+  })
+  return client.waitForTransactionReceipt({
+    hash: txHash,
+    status: TransactionStatus.ACCEPTED,
+  })
 }

@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ShieldAlert, Plus, RefreshCw, ChevronRight, FileText } from 'lucide-react'
 import { fetchAllCases, fetchAccounts, reportViolation } from '../api'
+import { contractWrite } from '../glClient'
+import { useWallet } from '../context/WalletContext'
 import StatusBadge from '../components/StatusBadge'
 
 const TABS = ['ALL', 'FILED', 'ACTIVE', 'ESCALATED', 'NEED APPROVAL', 'RESOLVED']
@@ -19,9 +21,11 @@ export default function Incidents() {
   const [loading, setLoading] = useState(true)
   const [showReport, setShowReport] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [reportError, setReportError] = useState('')
   const [form, setForm] = useState({
     account_id: '', violation_type: VIOLATIONS[0], description: '', amount: '0', severity: '3',
   })
+  const { wallet } = useWallet()
 
   const load = async () => {
     setLoading(true)
@@ -42,7 +46,35 @@ export default function Incidents() {
   const handleReport = async (e) => {
     e.preventDefault()
     setSubmitting(true)
-    await reportViolation(form)
+    setReportError('')
+
+    // Try wallet-signed write first
+    if (window.ethereum && wallet) {
+      try {
+        await contractWrite(wallet, 'report_violation', [
+          Number(form.account_id),
+          form.violation_type,
+          form.description,
+          Number(form.amount),
+          Number(form.severity),
+        ])
+        setShowReport(false)
+        setForm(f => ({...f, description: '', amount: '0', severity: '3'}))
+        await load()
+        setSubmitting(false)
+        return
+      } catch (err) {
+        if (err.code === 4001) { setReportError('Transaction rejected.'); setSubmitting(false); return }
+        console.warn('Direct write failed, falling back:', err.message)
+      }
+    }
+
+    // Fallback: backend
+    try {
+      await reportViolation(form)
+    } catch {
+      setReportError('Report failed. Server may be offline.')
+    }
     setShowReport(false)
     setForm(f => ({...f, description: '', amount: '0', severity: '3'}))
     await load()
@@ -125,6 +157,9 @@ export default function Incidents() {
                 </div>
               </div>
               <div className="flex items-center gap-3">
+                {reportError && (
+                  <span className="font-mono text-xs text-burn">{reportError}</span>
+                )}
                 <button type="submit" className="btn-primary text-xs" disabled={submitting}>
                   {submitting ? 'Submitting...' : 'Submit Report'}
                 </button>

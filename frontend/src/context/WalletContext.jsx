@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react'
+import { contractRead } from '../glClient'
 
 const ADMIN_WALLET = (import.meta.env.VITE_ADMIN_WALLET || '0xf9346827f713eb953a2e22465b9ee91901726bdc').toLowerCase()
 const API_BASE = import.meta.env.VITE_API_URL || '/api'
@@ -50,6 +51,17 @@ export function WalletProvider({ children }) {
 
   // Check if wallet has accounts on the contract
   const checkRegistration = useCallback(async (addr) => {
+    // Try direct contract read first
+    try {
+      const all = await contractRead('get_all_accounts')
+      if (Array.isArray(all)) {
+        const has = all.some(a => a.wallet_address && a.wallet_address.toLowerCase() === addr.toLowerCase())
+        setRegistered(has)
+        localStorage.setItem('aos_registered', has ? 'true' : 'false')
+        return has
+      }
+    } catch { /* fall through to backend */ }
+    // Fallback: backend API
     try {
       const r = await fetch(`${API_BASE}/wallet/${addr}`)
       if (r.ok) {

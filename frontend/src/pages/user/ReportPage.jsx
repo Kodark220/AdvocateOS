@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
 import { fetchAccounts, reportViolation } from '../../api'
+import { contractWrite } from '../../glClient'
 import { useWallet } from '../../context/WalletContext'
 
 const VIOLATIONS = [
@@ -16,6 +17,8 @@ export default function ReportPage() {
   const [accounts, setAccounts] = useState([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+  const [status, setStatus] = useState('')
+  const [error, setError] = useState('')
   const [form, setForm] = useState({
     account_id: '', violation_type: VIOLATIONS[0], description: '', amount: '0', severity: '3',
   })
@@ -39,9 +42,46 @@ export default function ReportPage() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     setSubmitting(true)
-    const res = await reportViolation(form)
+    setError('')
+    setStatus('')
+
+    // Try wallet-signed direct contract write
+    if (window.ethereum && wallet) {
+      try {
+        setStatus('Please confirm the transaction in your wallet...')
+        await contractWrite(wallet, 'report_violation', [
+          Number(form.account_id),
+          form.violation_type,
+          form.description,
+          Number(form.amount),
+          Number(form.severity),
+        ])
+        setSubmitting(false)
+        navigate('/my-cases')
+        return
+      } catch (err) {
+        if (err.code === 4001) {
+          setError('Transaction rejected. Please approve in your wallet.')
+          setSubmitting(false)
+          return
+        }
+        console.warn('Direct write failed, falling back:', err.message)
+      }
+    }
+
+    // Fallback: backend API
+    setStatus('Submitting via backend...')
+    try {
+      const res = await reportViolation(form)
+      if (res.ok) {
+        navigate('/my-cases')
+      } else {
+        setError(res.error || 'Report failed. Please try again.')
+      }
+    } catch {
+      setError('Report failed. Server may be unreachable.')
+    }
     setSubmitting(false)
-    if (res.ok) navigate('/my-cases')
   }
 
   if (loading) {
@@ -140,6 +180,18 @@ export default function ReportPage() {
                   </select>
                 </div>
               </div>
+
+              {error && (
+                <div className="mb-4 px-3 py-2.5 rounded-sm border border-burn/20 bg-burn/5">
+                  <p className="font-mono text-xs text-burn">{error}</p>
+                </div>
+              )}
+
+              {status && submitting && (
+                <div className="mb-4 px-3 py-2 rounded-sm border border-signal/20 bg-signal/5">
+                  <p className="font-mono text-xs text-signal">{status}</p>
+                </div>
+              )}
 
               <button type="submit" className="btn-primary w-full text-sm" disabled={submitting}>
                 {submitting ? 'Submitting...' : 'Submit Report'}
