@@ -10,8 +10,16 @@ import shutil
 import json
 import os
 import sys
+import time
+import logging
+try:
+    import fcntl
+except ImportError:
+    fcntl = None  # Windows — no file locking needed for single-process dev
 from flask import Flask, render_template_string, request, redirect, url_for, flash, jsonify
 from flask_cors import CORS
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 # ── CONFIG ──
 
@@ -99,10 +107,11 @@ def gl_call(method, *args, network=None):
             s = line.strip()
             if s.startswith("{") or s.startswith("["):
                 return json.loads(s)
+        logging.warning("gl_call %s on %s: no JSON in output", method, net)
     except subprocess.TimeoutExpired:
-        pass
-    except Exception:
-        pass
+        logging.error("gl_call %s on %s: timeout after %ds", method, net, READ_TIMEOUT)
+    except Exception as e:
+        logging.error("gl_call %s on %s: %s", method, net, e)
     return None
 
 
@@ -110,22 +119,50 @@ def gl_write(method, *args, network=None):
     net = network or DEFAULT_NETWORK
     contract = _get_contract(net)
     rpc = _get_rpc(net)
+    cli_network = NETWORKS[net]["cli_network"]
     if not contract:
         return False
-    cmd = [GL_PATH, "write", "--rpc", rpc, contract, method]
-    for a in args:
-        cmd += ["--args", str(a)]
     try:
-        r = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                             stderr=subprocess.PIPE)
-        if KEYSTORE_PASSWORD:
-            r.stdin.write((KEYSTORE_PASSWORD + "\n").encode())
-            r.stdin.flush()
-        # Don't wait for consensus — return immediately after submitting
-        import time
-        time.sleep(5)
+        # File lock to prevent race conditions between Gunicorn workers
+        lock_fd = None
+        if fcntl:
+            lock_fd = open("/tmp/genlayer_cli.lock", "w")
+            fcntl.flock(lock_fd, fcntl.LOCK_EX)
+        try:
+            # Switch to the correct network (needed for consensus contract resolution)
+            subprocess.run([GL_PATH, "network", "set", cli_network],
+                           capture_output=True, text=True, timeout=10)
+            cmd = [GL_PATH, "write", "--rpc", rpc, contract, method]
+            for a in args:
+                cmd += ["--args", str(a)]
+            r = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE)
+            if KEYSTORE_PASSWORD:
+                r.stdin.write((KEYSTORE_PASSWORD + "\n").encode())
+                r.stdin.flush()
+        finally:
+            if lock_fd and fcntl:
+                fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                lock_fd.close()
+        # Wait briefly for the tx to be submitted, then release
+        # Don't wait for full consensus — just confirm submission
+        try:
+            stdout, stderr = r.communicate(timeout=30)
+            output = stdout + stderr
+            if "Transaction Hash" in output:
+                logging.info("gl_write %s on %s: tx submitted", method, net)
+                return True
+            logging.error("gl_write %s on %s: %s", method, net, output[:500])
+            return False
+        except subprocess.TimeoutExpired:
+            # TX submitted but consensus still pending — that's OK
+            logging.info("gl_write %s on %s: timeout waiting for consensus (tx likely submitted)", method, net)
+            r.kill()
+            r.communicate()
+            return True
         return True
-    except Exception:
+    except Exception as e:
+        logging.error("gl_write %s on %s: %s", method, net, e)
         return False
 
 
@@ -292,6 +329,12 @@ def resolve(case_id):
     ok = gl_write("resolve_case", str(case_id), note, amount)
     flash(f"Case #{case_id} resolved." if ok else "Resolution failed.", "success" if ok else "error")
     return redirect(url_for("case_detail", case_id=case_id))
+
+
+@app.route("/api/health")
+def api_health():
+    """Health check endpoint for monitoring."""
+    return jsonify({"status": "ok", "cli": bool(GL_PATH), "networks": list(NETWORKS.keys())})
 
 
 @app.route("/api/networks")
