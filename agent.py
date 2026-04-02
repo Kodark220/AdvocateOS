@@ -10,8 +10,8 @@ and autonomously handles the full lifecycle:
   4. ESCALATE — Auto-escalate when institutions miss deadlines
   5. REVIEW — Check institution responses, recommend resolve/escalate
 
-Runs as a long-lived process against the deployed AdvocateOS contract
-on GenLayer Studionet.
+Runs as a long-lived process against the deployed AdvocateOS contracts
+on GenLayer Studionet and Bradbury testnet (dual-network).
 """
 
 import subprocess
@@ -31,12 +31,24 @@ import notifications
 
 # ── CONFIGURATION ──
 
-CONTRACT_ADDRESS = os.environ.get(
-    "AOS_CONTRACT_STUDIONET",
-    os.environ.get("AOS_CONTRACT", "0x5b1C73fb7F1df7081126bF473eB40FfE77F05DFb"),
-)
-RPC_URL = os.environ.get("AOS_RPC_URL", "https://studio.genlayer.com/api")
-CLI_NETWORK = os.environ.get("AOS_CLI_NETWORK", "studionet")
+NETWORKS: dict[str, dict] = {
+    "studionet": {
+        "contract": os.environ.get("AOS_CONTRACT_STUDIONET", "0x5b1C73fb7F1df7081126bF473eB40FfE77F05DFb"),
+        "rpc": "https://studio.genlayer.com/api",
+        "cli_network": "studionet",
+        "label": "Studionet",
+    },
+    "bradbury": {
+        "contract": os.environ.get("AOS_CONTRACT_BRADBURY", "0x6E7694c3ffbB4b109b2A37D009cE29425039E9da"),
+        "rpc": "https://rpc-bradbury.genlayer.com",
+        "cli_network": "testnet-bradbury",
+        "label": "Bradbury Testnet",
+    },
+}
+
+# Current active network context (set per-cycle in the main loop)
+_active_net: str = "studionet"
+
 KEYSTORE_PASSWORD = os.environ.get("AOS_KEYSTORE_PASSWORD", "")
 GL_PATH = os.environ.get("AOS_GL_PATH") or shutil.which("genlayer")
 
@@ -45,6 +57,10 @@ SCAN_INTERVAL = int(os.environ.get("AOS_SCAN_INTERVAL", "3600"))
 CASE_CHECK_INTERVAL = int(os.environ.get("AOS_CASE_CHECK_INTERVAL", "1800"))
 WRITE_TIMEOUT = int(os.environ.get("AOS_WRITE_TIMEOUT", "600"))
 READ_TIMEOUT = int(os.environ.get("AOS_READ_TIMEOUT", "60"))
+
+# Network health cache: skip offline networks for 120s
+_net_health: dict[str, dict] = {}
+PROBE_TIMEOUT = 15
 
 # Jurisdiction-aware tier labels and deadlines (mirrors contract)
 JURISDICTION_TIERS: dict[str, dict] = {
@@ -123,9 +139,43 @@ log = logging.getLogger("AdvocateOS-Agent")
 
 # ── GENLAYER CLI INTERFACE ──
 
+def _net() -> dict:
+    """Return the current active network config."""
+    return NETWORKS[_active_net]
+
+
+def probe_network(net: str) -> bool:
+    """Quick health check — try get_stats with short timeout. Cache for 120s."""
+    now = time.time()
+    cached = _net_health.get(net)
+    if cached and now - cached["at"] < 120:
+        return cached["ok"]
+    cfg = NETWORKS[net]
+    cmd = [GL_PATH, "call", "--rpc", cfg["rpc"], cfg["contract"], "get_stats"]
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=PROBE_TIMEOUT)
+        output = r.stdout + r.stderr
+        ok = any(s.strip().startswith("{") for s in output.split("\n"))
+        _net_health[net] = {"ok": ok, "at": now}
+        if ok:
+            log.info("probe %s: online", net)
+        else:
+            log.warning("probe %s: no JSON (exit %d)", net, r.returncode)
+        return ok
+    except subprocess.TimeoutExpired:
+        log.warning("probe %s: timeout after %ds", net, PROBE_TIMEOUT)
+        _net_health[net] = {"ok": False, "at": now}
+        return False
+    except Exception as e:
+        log.error("probe %s: %s", net, e)
+        _net_health[net] = {"ok": False, "at": now}
+        return False
+
+
 def gl_call(method: str, *args: str) -> dict | list | str | None:
-    """Call a view method on the contract via CLI with --rpc."""
-    cmd = [GL_PATH, "call", "--rpc", RPC_URL, CONTRACT_ADDRESS, method]
+    """Call a view method on the active network's contract via CLI with --rpc."""
+    cfg = _net()
+    cmd = [GL_PATH, "call", "--rpc", cfg["rpc"], cfg["contract"], method]
     for a in args:
         cmd += ["--args", str(a)]
     try:
@@ -138,15 +188,16 @@ def gl_call(method: str, *args: str) -> dict | list | str | None:
             if s.startswith("{") or s.startswith("["):
                 return json.loads(s)
     except subprocess.TimeoutExpired:
-        log.error("gl_call %s timed out after %ds", method, READ_TIMEOUT)
+        log.error("[%s] gl_call %s timed out after %ds", _active_net, method, READ_TIMEOUT)
     except Exception as e:
-        log.error("gl_call %s failed: %s", method, e)
+        log.error("[%s] gl_call %s failed: %s", _active_net, method, e)
     return None
 
 
 def gl_write(method: str, *args: str) -> bool:
-    """Send a write transaction with keystore password and file locking."""
-    cmd = [GL_PATH, "write", "--rpc", RPC_URL, CONTRACT_ADDRESS, method]
+    """Send a write transaction on the active network with keystore password and file locking."""
+    cfg = _net()
+    cmd = [GL_PATH, "write", "--rpc", cfg["rpc"], cfg["contract"], method]
     for a in args:
         cmd += ["--args", str(a)]
     try:
@@ -157,7 +208,7 @@ def gl_write(method: str, *args: str) -> bool:
         try:
             # Switch to correct network for consensus
             subprocess.run(
-                [GL_PATH, "network", "set", CLI_NETWORK],
+                [GL_PATH, "network", "set", cfg["cli_network"]],
                 capture_output=True, text=True, timeout=10,
             )
             r = subprocess.Popen(
@@ -175,21 +226,21 @@ def gl_write(method: str, *args: str) -> bool:
             stdout, stderr = r.communicate(timeout=WRITE_TIMEOUT)
             combined = (stdout + stderr).decode("utf-8", errors="replace")
             if "Transaction Hash" in combined or "successfully" in combined.lower():
-                log.info("gl_write %s: tx submitted", method)
+                log.info("[%s] gl_write %s: tx submitted", _active_net, method)
                 return True
             if "DISAGREE" in combined:
-                log.warning("Validators DISAGREE on %s", method)
+                log.warning("[%s] Validators DISAGREE on %s", _active_net, method)
             elif "not processed" in combined.lower():
-                log.warning("Transaction not processed: %s", method)
+                log.warning("[%s] Transaction not processed: %s", _active_net, method)
             else:
-                log.warning("Write %s exit=%d: %s", method, r.returncode, combined[-300:])
+                log.warning("[%s] Write %s exit=%d: %s", _active_net, method, r.returncode, combined[-300:])
         except subprocess.TimeoutExpired:
-            log.info("Write %s: timeout waiting for consensus (tx likely submitted)", method)
+            log.info("[%s] Write %s: timeout waiting for consensus (tx likely submitted)", _active_net, method)
             r.kill()
             r.communicate()
             return True
     except Exception as e:
-        log.error("Write %s error: %s", method, e)
+        log.error("[%s] Write %s error: %s", _active_net, method, e)
     return False
 
 
@@ -403,24 +454,30 @@ def scan_all_accounts():
 # ── AGENT MAIN LOOP ──
 
 def print_banner():
-    stats = fetch_stats()
     log.info("=" * 60)
     log.info("  AdvocateOS Agent — Autonomous Consumer Watchdog")
-    log.info("  Contract: %s", CONTRACT_ADDRESS)
-    log.info("  Network:  %s (RPC: %s)", CLI_NETWORK, RPC_URL)
-    if stats:
-        log.info(
-            "  Accounts: %d | Violations: %d | Escalations: %d | Resolved: %d",
-            stats.get("total_accounts", 0),
-            stats.get("total_violations", 0),
-            stats.get("total_escalations", 0),
-            stats.get("total_resolved", 0),
-        )
+    log.info("  Mode: Dual-Network (Studionet + Bradbury)")
+    for net_key, cfg in NETWORKS.items():
+        global _active_net
+        _active_net = net_key
+        stats = fetch_stats()
+        if stats:
+            log.info(
+                "  [%s] %s | Accounts: %d | Violations: %d | Escalations: %d | Resolved: %d",
+                net_key, cfg["contract"][:12] + "...",
+                stats.get("total_accounts", 0),
+                stats.get("total_violations", 0),
+                stats.get("total_escalations", 0),
+                stats.get("total_resolved", 0),
+            )
+        else:
+            log.warning("  [%s] %s — offline or unreachable", net_key, cfg["contract"][:12] + "...")
     log.info("=" * 60)
 
 
 def run_agent():
-    """Main agent loop — runs forever."""
+    """Main agent loop — runs forever, monitoring both networks."""
+    global _active_net
     if not GL_PATH:
         log.error("genlayer CLI not found in PATH. Install it first.")
         sys.exit(1)
@@ -429,6 +486,7 @@ def run_agent():
 
     log.info("Agent started. Scan interval: %ds, Case check: %ds",
              SCAN_INTERVAL, CASE_CHECK_INTERVAL)
+    log.info("Monitored networks: %s", ", ".join(NETWORKS.keys()))
     log.info("Supported jurisdictions: %s", ", ".join(JURISDICTION_TIERS.keys()))
 
     last_scan = 0
@@ -437,16 +495,26 @@ def run_agent():
     while True:
         now = time.time()
 
-        # Periodic violation scanning
+        # Periodic violation scanning — both networks
         if now - last_scan >= SCAN_INTERVAL:
-            log.info("─── VIOLATION SCAN CYCLE ───")
-            scan_all_accounts()
+            for net_key in NETWORKS:
+                _active_net = net_key
+                if not probe_network(net_key):
+                    log.warning("─── SCAN SKIP [%s] — network offline ───", net_key)
+                    continue
+                log.info("─── VIOLATION SCAN [%s] ───", net_key)
+                scan_all_accounts()
             last_scan = now
 
-        # Periodic case lifecycle processing
+        # Periodic case lifecycle processing — both networks
         if now - last_case_check >= CASE_CHECK_INTERVAL:
-            log.info("─── CASE LIFECYCLE CHECK ───")
-            process_open_cases()
+            for net_key in NETWORKS:
+                _active_net = net_key
+                if not probe_network(net_key):
+                    log.warning("─── CASE CHECK SKIP [%s] — network offline ───", net_key)
+                    continue
+                log.info("─── CASE LIFECYCLE [%s] ───", net_key)
+                process_open_cases()
             last_case_check = now
 
         # Sleep before next tick
@@ -456,38 +524,45 @@ def run_agent():
 # ── CLI COMMANDS ──
 
 def cmd_status():
-    """Show current contract state."""
+    """Show current contract state across both networks."""
+    global _active_net
     print_banner()
-    accounts = fetch_all_accounts()
-    if accounts:
-        print("\nAccounts:")
-        for a in accounts:
-            status = "ACTIVE" if a.get("active") else "INACTIVE"
-            jur = a.get("jurisdiction", "?")
-            url = ACCOUNT_DATA_URLS.get(a["id"], "not configured")
-            print(f"  #{a['id']} {a['name']} @ {a['institution']} [{status}] ({jur})")
-            wallet = a.get("wallet_address", "")
-            ch = a.get("chain", "")
-            if wallet:
-                print(f"      Wallet: {wallet} on {ch}")
-            tc = a.get("terms_url", "")
-            print(f"      Data URL: {url}")
-            if tc:
-                print(f"      Terms URL: {tc}")
+    for net_key in NETWORKS:
+        _active_net = net_key
+        if not probe_network(net_key):
+            print(f"\n[{net_key}] — OFFLINE")
+            continue
+        print(f"\n[{net_key}] {NETWORKS[net_key]['label']}:")
+        accounts = fetch_all_accounts()
+        if accounts:
+            print("  Accounts:")
+            for a in accounts:
+                status = "ACTIVE" if a.get("active") else "INACTIVE"
+                jur = a.get("jurisdiction", "?")
+                url = ACCOUNT_DATA_URLS.get(a["id"], "not configured")
+                print(f"    #{a['id']} {a['name']} @ {a['institution']} [{status}] ({jur})")
+                wallet = a.get("wallet_address", "")
+                ch = a.get("chain", "")
+                if wallet:
+                    print(f"        Wallet: {wallet} on {ch}")
+                tc = a.get("terms_url", "")
+                print(f"        Data URL: {url}")
+                if tc:
+                    print(f"        Terms URL: {tc}")
 
-    cases = fetch_open_cases()
-    if cases:
-        print(f"\nOpen Cases ({len(cases)}):")
-        for c in cases:
-            cjur = c.get("jurisdiction", "US")
-            print(
-                f"  #{c['id']}: {c['violation_type']} [{cjur}] | "
-                f"status={c['status']} | tier={c['current_tier']} "
-                f"({_get_tier_label(cjur, c['current_tier'])}) | "
-                f"amount={c.get('amount_disputed', 0)}"
-            )
-    else:
-        print("\nNo open cases.")
+        cases = fetch_open_cases()
+        if cases:
+            print(f"  Open Cases ({len(cases)}):")
+            for c in cases:
+                cjur = c.get("jurisdiction", "US")
+                print(
+                    f"    #{c['id']}: {c['violation_type']} [{cjur}] | "
+                    f"status={c['status']} | tier={c['current_tier']} "
+                    f"({_get_tier_label(cjur, c['current_tier'])}) | "
+                    f"amount={c.get('amount_disputed', 0)}"
+                )
+        else:
+            print("  No open cases.")
 
 
 def cmd_add_account(name: str, institution: str, account_ref: str,
