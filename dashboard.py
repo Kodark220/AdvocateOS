@@ -39,7 +39,7 @@ NETWORKS = {
     },
 }
 
-DEFAULT_NETWORK = os.environ.get("AOS_DEFAULT_NETWORK", "bradbury")
+DEFAULT_NETWORK = os.environ.get("AOS_DEFAULT_NETWORK", "studionet")
 CONTRACT_ADDRESS = NETWORKS[DEFAULT_NETWORK]["contract"]
 GL_PATH = os.environ.get("AOS_GL_PATH") or shutil.which("genlayer")
 WRITE_TIMEOUT = int(os.environ.get("AOS_WRITE_TIMEOUT", "600"))
