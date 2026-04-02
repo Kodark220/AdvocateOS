@@ -1,21 +1,28 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ShieldAlert, FileText, AlertTriangle, Wallet, RefreshCw, ChevronRight, Activity, UserPlus } from 'lucide-react'
-import { fetchStats, fetchAccounts, fetchAllCases } from '../../api'
+import { fetchStats, fetchAccounts, fetchAllCases, isNetworkError } from '../../api'
 import { useWallet } from '../../context/WalletContext'
 import StatusBadge from '../../components/StatusBadge'
+import NetworkBanner from '../../components/NetworkBanner'
 
 export default function UserDashboard() {
   const { wallet, username } = useWallet()
   const [accounts, setAccounts] = useState([])
   const [cases, setCases] = useState([])
   const [loading, setLoading] = useState(true)
+  const [networkError, setNetworkError] = useState(null)
 
   const load = async () => {
     setLoading(true)
+    setNetworkError(null)
     const [a, c] = await Promise.all([fetchAccounts(), fetchAllCases()])
-    setAccounts(a)
-    setCases(c)
+    if (isNetworkError(a)) {
+      setNetworkError(a.message)
+      setAccounts([]); setCases([])
+    } else {
+      setAccounts(Array.isArray(a) ? a : []); setCases(Array.isArray(c) ? c : [])
+    }
     setLoading(false)
   }
 
@@ -48,6 +55,8 @@ export default function UserDashboard() {
           </div>
         </div>
       </div>
+
+      <NetworkBanner message={networkError} />
 
       <div className="px-6 py-6 max-w-[1200px] mx-auto">
         {/* Welcome */}

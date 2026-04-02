@@ -44,7 +44,11 @@ CONTRACT_ADDRESS = NETWORKS[DEFAULT_NETWORK]["contract"]
 GL_PATH = os.environ.get("AOS_GL_PATH") or shutil.which("genlayer")
 WRITE_TIMEOUT = int(os.environ.get("AOS_WRITE_TIMEOUT", "600"))
 READ_TIMEOUT = int(os.environ.get("AOS_READ_TIMEOUT", "60"))
+PROBE_TIMEOUT = int(os.environ.get("AOS_PROBE_TIMEOUT", "15"))
 KEYSTORE_PASSWORD = os.environ.get("AOS_KEYSTORE_PASSWORD", "")
+
+# Network status cache: { "bradbury": {"online": True/False, "checked_at": timestamp} }
+_network_status = {}
 
 SUPPORTED_CHAINS = [
     "ethereum", "base", "solana", "polygon", "arbitrum",
@@ -92,11 +96,56 @@ def _get_rpc(network=None):
     return NETWORKS[net]["rpc"]
 
 
+def _probe_network(net):
+    """Quick probe: try a fast get_stats call with short timeout. Cache result for 60s."""
+    now = time.time()
+    cached = _network_status.get(net)
+    if cached and now - cached["checked_at"] < 60:
+        return cached["online"]
+    contract = _get_contract(net)
+    rpc = _get_rpc(net)
+    if not contract:
+        _network_status[net] = {"online": False, "checked_at": now}
+        return False
+    cmd = [GL_PATH, "call", "--rpc", rpc, contract, "get_stats"]
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=PROBE_TIMEOUT)
+        output = r.stdout + r.stderr
+        online = any(s.strip().startswith("{") for s in output.split("\n"))
+        _network_status[net] = {"online": online, "checked_at": now}
+        if online:
+            logging.info("probe %s: online", net)
+        else:
+            logging.warning("probe %s: no JSON (exit %d)", net, r.returncode)
+        return online
+    except subprocess.TimeoutExpired:
+        logging.warning("probe %s: timeout after %ds", net, PROBE_TIMEOUT)
+        _network_status[net] = {"online": False, "checked_at": now}
+        return False
+    except Exception as e:
+        logging.error("probe %s: %s", net, e)
+        _network_status[net] = {"online": False, "checked_at": now}
+        return False
+
+
+def _is_network_online(net):
+    """Check cached status without probing. Returns None if never probed."""
+    cached = _network_status.get(net)
+    if cached and time.time() - cached["checked_at"] < 120:
+        return cached["online"]
+    return None
+
+
 def gl_call(method, *args, network=None):
     net = network or DEFAULT_NETWORK
     contract = _get_contract(net)
     rpc = _get_rpc(net)
     if not contract:
+        return None
+    # If we know the network is offline, skip the slow call
+    status = _is_network_online(net)
+    if status is False:
+        logging.info("gl_call %s on %s: skipped (network offline)", method, net)
         return None
     cmd = [GL_PATH, "call", "--rpc", rpc, contract, method]
     for a in args:
@@ -106,10 +155,13 @@ def gl_call(method, *args, network=None):
         for line in (r.stdout + r.stderr).split("\n"):
             s = line.strip()
             if s.startswith("{") or s.startswith("["):
+                _network_status[net] = {"online": True, "checked_at": time.time()}
                 return json.loads(s)
         logging.warning("gl_call %s on %s: no JSON in output", method, net)
+        _network_status[net] = {"online": False, "checked_at": time.time()}
     except subprocess.TimeoutExpired:
         logging.error("gl_call %s on %s: timeout after %ds", method, net, READ_TIMEOUT)
+        _network_status[net] = {"online": False, "checked_at": time.time()}
     except Exception as e:
         logging.error("gl_call %s on %s: %s", method, net, e)
     return None
@@ -339,30 +391,54 @@ def api_health():
 
 @app.route("/api/networks")
 def api_networks():
-    """Return available networks and current default."""
+    """Return available networks with online status."""
     nets = {}
     for k, v in NETWORKS.items():
-        nets[k] = {"label": v["label"], "hasContract": bool(v["contract"])}
+        cached = _network_status.get(k)
+        online = cached["online"] if cached and time.time() - cached["checked_at"] < 120 else None
+        nets[k] = {
+            "label": v["label"],
+            "hasContract": bool(v["contract"]),
+            "online": online,  # True, False, or null (unknown)
+        }
     return jsonify({"networks": nets, "default": DEFAULT_NETWORK})
+
+
+@app.route("/api/networks/status")
+def api_networks_status():
+    """Probe all networks and return live status. May take a few seconds."""
+    results = {}
+    for k in NETWORKS:
+        online = _probe_network(k)
+        results[k] = {"online": online, "label": NETWORKS[k]["label"]}
+    return jsonify(results)
 
 
 @app.route("/api/stats")
 def api_stats():
     net = _resolve_network()
-    return jsonify(gl_call("get_stats", network=net) or {})
+    result = gl_call("get_stats", network=net)
+    if result is None:
+        return jsonify({"error": "network_unavailable", "network": net, "message": f"{NETWORKS[net]['label']} is currently unreachable"}), 503
+    return jsonify(result)
 
 
 @app.route("/api/accounts")
 def api_accounts():
     net = _resolve_network()
-    return jsonify(gl_call("get_all_accounts", network=net) or [])
+    result = gl_call("get_all_accounts", network=net)
+    if result is None:
+        return jsonify({"error": "network_unavailable", "network": net, "message": f"{NETWORKS[net]['label']} is currently unreachable"}), 503
+    return jsonify(result)
 
 
 @app.route("/api/wallet/<address>")
 def api_wallet_accounts(address):
     """Check if a wallet address has any registered accounts."""
     net = _resolve_network()
-    all_accounts = gl_call("get_all_accounts", network=net) or []
+    all_accounts = gl_call("get_all_accounts", network=net)
+    if all_accounts is None:
+        return jsonify({"accounts": [], "registered": False, "error": "network_unavailable", "network": net})
     matched = [
         a for a in all_accounts
         if isinstance(a, dict) and a.get("wallet_address", "").lower() == address.lower()
@@ -373,13 +449,18 @@ def api_wallet_accounts(address):
 @app.route("/api/cases/open")
 def api_open_cases():
     net = _resolve_network()
-    return jsonify(gl_call("get_open_cases", network=net) or [])
+    result = gl_call("get_open_cases", network=net)
+    if result is None:
+        return jsonify({"error": "network_unavailable", "network": net, "message": f"{NETWORKS[net]['label']} is currently unreachable"}), 503
+    return jsonify(result)
 
 
 @app.route("/api/cases")
 def api_all_cases():
     net = _resolve_network()
-    stats = gl_call("get_stats", network=net) or {}
+    stats = gl_call("get_stats", network=net)
+    if stats is None:
+        return jsonify({"error": "network_unavailable", "network": net, "message": f"{NETWORKS[net]['label']} is currently unreachable"}), 503
     total = stats.get("total_violations", 0)
     cases = []
     for i in range(1, total + 1):

@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ShieldAlert, CheckCircle, DollarSign, TrendingUp, RefreshCw, ChevronRight, Activity, Wallet, Users } from 'lucide-react'
-import { fetchStats, fetchAccounts, fetchAllCases } from '../api'
+import { fetchStats, fetchAccounts, fetchAllCases, isNetworkError } from '../api'
 import { useWallet } from '../context/WalletContext'
 import StatusBadge from '../components/StatusBadge'
+import NetworkBanner from '../components/NetworkBanner'
 
 const TABS = ['ALL', 'FILED', 'ACTIVE', 'ESCALATED', 'NEED APPROVAL', 'RESOLVED']
 
@@ -13,15 +14,20 @@ export default function Dashboard() {
   const [cases, setCases] = useState([])
   const [tab, setTab] = useState('ALL')
   const [loading, setLoading] = useState(true)
+  const [networkError, setNetworkError] = useState(null)
 
   const { wallet } = useWallet()
 
   const load = async () => {
     setLoading(true)
+    setNetworkError(null)
     const [s, a, c] = await Promise.all([fetchStats(), fetchAccounts(), fetchAllCases()])
-    setStats(s)
-    setAccounts(a)
-    setCases(c)
+    if (isNetworkError(s)) {
+      setNetworkError(s.message)
+      setStats({}); setAccounts([]); setCases([])
+    } else {
+      setStats(s); setAccounts(Array.isArray(a) ? a : []); setCases(Array.isArray(c) ? c : [])
+    }
     setLoading(false)
   }
 
@@ -64,6 +70,8 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      <NetworkBanner message={networkError} />
 
       <div className="px-6 py-6 max-w-[1400px] mx-auto">
         {/* Stats grid */}

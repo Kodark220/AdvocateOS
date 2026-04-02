@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
-import { Wallet, LogOut, Copy, Check, ChevronDown } from 'lucide-react'
+import { Wallet, LogOut, Copy, Check, ChevronDown, Wifi, WifiOff } from 'lucide-react'
 import { useWallet } from '../context/WalletContext'
-import { getNetwork, setNetwork, fetchNetworks } from '../api'
+import { getNetwork, setNetwork, fetchNetworks, fetchNetworkStatus } from '../api'
 
 const NET_LABELS = {
   bradbury: 'Bradbury Testnet',
@@ -15,12 +15,28 @@ export default function WalletBar() {
   const [copied, setCopied] = useState(false)
   const [network, setNet] = useState(getNetwork())
   const [networks, setNetworks] = useState({})
+  const [netStatus, setNetStatus] = useState({})  // { bradbury: {online: true}, ... }
   const ref = useRef(null)
   const netRef = useRef(null)
 
   useEffect(() => {
-    fetchNetworks().then((d) => setNetworks(d.networks || {}))
+    fetchNetworks().then((d) => {
+      setNetworks(d.networks || {})
+      // Extract initial online status from /api/networks response
+      const initial = {}
+      for (const [k, v] of Object.entries(d.networks || {})) {
+        if (v.online !== null && v.online !== undefined) initial[k] = { online: v.online }
+      }
+      setNetStatus(initial)
+    })
   }, [])
+
+  // Probe network status when dropdown opens
+  useEffect(() => {
+    if (netOpen) {
+      fetchNetworkStatus().then((s) => setNetStatus(s)).catch(() => {})
+    }
+  }, [netOpen])
 
   useEffect(() => {
     const handler = (e) => {
@@ -61,32 +77,31 @@ export default function WalletBar() {
             <ChevronDown className="w-3 h-3 text-muted" />
           </button>
           {netOpen && (
-            <div className="absolute right-0 top-full mt-1.5 w-48 card p-2 shadow-xl shadow-black/40">
-              {Object.keys(networks).length > 0
-                ? Object.entries(networks).map(([key, cfg]) => (
-                    <button
-                      key={key}
-                      onClick={() => switchNetwork(key)}
-                      className={`w-full text-left px-3 py-2 rounded-sm font-mono text-xs transition-colors flex items-center gap-2
-                        ${key === network ? 'bg-surface text-valid' : 'text-ghost hover:bg-surface/50'}`}
-                    >
-                      <div className={`w-1.5 h-1.5 rounded-full ${key === 'bradbury' ? 'bg-signal' : 'bg-acid'}`} />
-                      {NET_LABELS[key] || key}
-                      {key === network && <Check className="w-3 h-3 ml-auto" />}
-                    </button>
-                  ))
-                : ['bradbury', 'studionet'].map((key) => (
-                    <button
-                      key={key}
-                      onClick={() => switchNetwork(key)}
-                      className={`w-full text-left px-3 py-2 rounded-sm font-mono text-xs transition-colors flex items-center gap-2
-                        ${key === network ? 'bg-surface text-valid' : 'text-ghost hover:bg-surface/50'}`}
-                    >
-                      <div className={`w-1.5 h-1.5 rounded-full ${key === 'bradbury' ? 'bg-signal' : 'bg-acid'}`} />
-                      {NET_LABELS[key]}
-                      {key === network && <Check className="w-3 h-3 ml-auto" />}
-                    </button>
-                  ))}
+            <div className="absolute right-0 top-full mt-1.5 w-56 card p-2 shadow-xl shadow-black/40">
+              {(Object.keys(networks).length > 0
+                ? Object.keys(networks)
+                : ['bradbury', 'studionet']
+              ).map((key) => {
+                const status = netStatus[key]
+                const isOnline = status?.online
+                const isOffline = status?.online === false
+                return (
+                  <button
+                    key={key}
+                    onClick={() => switchNetwork(key)}
+                    className={`w-full text-left px-3 py-2 rounded-sm font-mono text-xs transition-colors flex items-center gap-2
+                      ${key === network ? 'bg-surface text-valid' : 'text-ghost hover:bg-surface/50'}`}
+                  >
+                    <div className={`w-1.5 h-1.5 rounded-full ${
+                      isOffline ? 'bg-burn' : isOnline ? 'bg-valid' : (key === 'bradbury' ? 'bg-signal' : 'bg-acid')
+                    }`} />
+                    <span className="flex-1">{NET_LABELS[key] || key}</span>
+                    {isOffline && <span className="text-[9px] text-burn/70 uppercase">offline</span>}
+                    {isOnline && key !== network && <span className="text-[9px] text-valid/70 uppercase">online</span>}
+                    {key === network && <Check className="w-3 h-3 ml-auto" />}
+                  </button>
+                )
+              })}
             </div>
           )}
         </div>
