@@ -68,25 +68,15 @@ export default function RegisterPage() {
           setSubmitting(false)
           return
         }
-        console.warn('Direct wallet write failed, falling back to backend:', err.message)
+        console.error('Wallet write failed:', err.message)
+        setError(`Registration failed: ${err.message || 'Unknown error'}. Please ensure your wallet is connected to the GenLayer network and try again.`)
+        setSubmitting(false)
+        return
       }
+    } else {
+      setError('Please connect your wallet first. A wallet signature is required to register.')
+      setSubmitting(false)
     }
-
-    // Fallback: use backend API
-    setStatus('Registering via backend...')
-    try {
-      const res = await registerAccount({ ...form, wallet })
-      if (res.ok) {
-        markRegistered(form.name)
-        setSuccess(true)
-        setTimeout(() => navigate('/'), 1500)
-      } else {
-        setError(res.error || 'Registration failed. Please try again.')
-      }
-    } catch {
-      setError('Registration failed. Server may be unreachable.')
-    }
-    setSubmitting(false)
   }
 
   if (success) {

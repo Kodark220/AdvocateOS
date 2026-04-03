@@ -52,11 +52,10 @@ export default function CaseDetail() {
         return
       } catch (err) {
         if (err.code === 4001) { setActError('Transaction rejected.'); setActing(''); return }
-        console.warn('Direct draft failed, falling back:', err.message)
+        console.warn('Direct draft failed:', err.message)
       }
     }
-    try { await draftComplaint(id) } catch { setActError('Draft failed. Server may be offline.') }
-    await load()
+    setActError('Draft failed. Please connect wallet and try again.')
     setActing('')
   }
 
@@ -71,11 +70,10 @@ export default function CaseDetail() {
         return
       } catch (err) {
         if (err.code === 4001) { setActError('Transaction rejected.'); setActing(''); return }
-        console.warn('Direct escalate failed, falling back:', err.message)
+        console.warn('Direct escalate failed:', err.message)
       }
     }
-    try { await escalateCase(id) } catch { setActError('Escalation failed. Server may be offline.') }
-    await load()
+    setActError('Escalation failed. Please connect wallet and try again.')
     setActing('')
   }
 
@@ -95,11 +93,10 @@ export default function CaseDetail() {
         return
       } catch (err) {
         if (err.code === 4001) { setActError('Transaction rejected.'); setActing(''); return }
-        console.warn('Direct resolve failed, falling back:', err.message)
+        console.warn('Direct resolve failed:', err.message)
       }
     }
-    try { await resolveCase(id, resolveForm) } catch { setActError('Resolve failed. Server may be offline.') }
-    await load()
+    setActError('Resolve failed. Please connect wallet and try again.')
     setActing('')
   }
 

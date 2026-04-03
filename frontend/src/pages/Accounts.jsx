@@ -86,24 +86,15 @@ export default function Accounts() {
         return
       } catch (err) {
         if (err.code === 4001) { setRegError('Transaction rejected.'); setSubmitting(false); return }
-        console.warn('Direct write failed, falling back:', err.message)
+        console.error('Wallet write failed:', err.message)
+        setRegError(`Registration failed: ${err.message || 'Unknown error'}. Please ensure your wallet is connected to the GenLayer network and try again.`)
+        setSubmitting(false)
+        return
       }
+    } else {
+      setRegError('Please connect your wallet first. A wallet signature is required to register.')
+      setSubmitting(false)
     }
-
-    // Fallback: backend
-    try {
-      const res = await registerAccount(form)
-      if (res.ok) {
-        setForm({ name: '', institution: '', ref: '', atype: 'checking', jurisdiction: 'US', wallet: '', chain: '' })
-        setShowForm(false)
-        await load()
-      } else {
-        setRegError(res.error || 'Registration failed.')
-      }
-    } catch {
-      setRegError('Registration failed. Server may be offline.')
-    }
-    setSubmitting(false)
   }
 
   return (

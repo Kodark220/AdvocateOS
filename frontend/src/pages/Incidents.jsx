@@ -65,20 +65,15 @@ export default function Incidents() {
         return
       } catch (err) {
         if (err.code === 4001) { setReportError('Transaction rejected.'); setSubmitting(false); return }
-        console.warn('Direct write failed, falling back:', err.message)
+        console.error('Wallet write failed:', err.message)
+        setReportError(`Report failed: ${err.message || 'Unknown error'}. Please try again.`)
+        setSubmitting(false)
+        return
       }
+    } else {
+      setReportError('Please connect your wallet first. A wallet signature is required.')
+      setSubmitting(false)
     }
-
-    // Fallback: backend
-    try {
-      await reportViolation(form)
-    } catch {
-      setReportError('Report failed. Server may be offline.')
-    }
-    setShowReport(false)
-    setForm(f => ({...f, description: '', amount: '0', severity: '3'}))
-    await load()
-    setSubmitting(false)
   }
 
   const filtered = cases.filter(c => {

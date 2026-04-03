@@ -65,23 +65,15 @@ export default function ReportPage() {
           setSubmitting(false)
           return
         }
-        console.warn('Direct write failed, falling back:', err.message)
+        console.error('Wallet write failed:', err.message)
+        setError(`Report failed: ${err.message || 'Unknown error'}. Please try again.`)
+        setSubmitting(false)
+        return
       }
+    } else {
+      setError('Please connect your wallet first. A wallet signature is required.')
+      setSubmitting(false)
     }
-
-    // Fallback: backend API
-    setStatus('Submitting via backend...')
-    try {
-      const res = await reportViolation(form)
-      if (res.ok) {
-        navigate('/my-cases')
-      } else {
-        setError(res.error || 'Report failed. Please try again.')
-      }
-    } catch {
-      setError('Report failed. Server may be unreachable.')
-    }
-    setSubmitting(false)
   }
 
   if (loading) {
