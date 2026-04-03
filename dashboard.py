@@ -110,8 +110,12 @@ def _probe_network(net):
     cmd = [GL_PATH, "call", "--rpc", rpc, contract, "get_stats"]
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=PROBE_TIMEOUT)
-        output = r.stdout + r.stderr
-        online = any(s.strip().startswith("{") for s in output.split("\n"))
+        # Check stdout first to avoid false negatives from stderr warnings like [genlayer-js]
+        online = any(
+            s.strip().startswith("{")
+            for s in r.stdout.split("\n")
+            if s.strip()
+        )
         _network_status[net] = {"online": online, "checked_at": now}
         if online:
             logging.info("probe %s: online", net)
@@ -152,11 +156,19 @@ def gl_call(method, *args, network=None):
         cmd += ["--args", str(a)]
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=READ_TIMEOUT)
-        for line in (r.stdout + r.stderr).split("\n"):
-            s = line.strip()
-            if s.startswith("{") or s.startswith("["):
-                _network_status[net] = {"online": True, "checked_at": time.time()}
-                return json.loads(s)
+        # Parse stdout first (stderr may contain deprecation warnings starting with '[')
+        for source in (r.stdout, r.stderr):
+            for line in source.split("\n"):
+                s = line.strip()
+                if not s or len(s) < 2:
+                    continue
+                if s.startswith("{") or s.startswith("["):
+                    try:
+                        parsed = json.loads(s)
+                        _network_status[net] = {"online": True, "checked_at": time.time()}
+                        return parsed
+                    except json.JSONDecodeError:
+                        continue
         logging.warning("gl_call %s on %s: no JSON in output", method, net)
         _network_status[net] = {"online": False, "checked_at": time.time()}
     except subprocess.TimeoutExpired:
