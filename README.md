@@ -5,7 +5,7 @@
 > An AI-powered autonomous consumer protection system built on [GenLayer](https://genlayer.com). AdvocateOS monitors financial accounts, detects violations using AI consensus, drafts legally-grounded complaint letters, and autonomously escalates through regulatory bodies — all on-chain with the Equivalence Principle.
 
 **Live Demo**: [advocate-os.vercel.app](https://advocate-os.vercel.app/)
-**Contract**: [`0x6E7694c3ffbB4b109b2A37D009cE29425039E9da`](https://explorer.genlayer.com/contracts/0x6E7694c3ffbB4b109b2A37D009cE29425039E9da) on Bradbury Testnet
+**Contract**: [`0x2e75bc5796791b20b645b17dcf2a9dfc052c83ab`](https://explorer.genlayer.com/contracts/0x2e75bc5796791b20b645b17dcf2a9dfc052c83ab) on Bradbury Testnet
 
 ---
 
@@ -206,7 +206,7 @@ AdvocateOS/
 ## Contract Details
 
 - **Network**: GenLayer Bradbury Testnet
-- **Address**: `0x6E7694c3ffbB4b109b2A37D009cE29425039E9da`
+- **Address**: `0x2e75bc5796791b20b645b17dcf2a9dfc052c83ab`
 - **SDK**: py-genlayer v1
 - **Size**: ~26 KB (under 28 KB limit)
 - **Methods**: 10 write + 10 view

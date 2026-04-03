@@ -26,7 +26,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 NETWORKS = {
     "bradbury": {
         "contract": os.environ.get("AOS_CONTRACT_BRADBURY",
-                                   os.environ.get("AOS_CONTRACT", "0x6E7694c3ffbB4b109b2A37D009cE29425039E9da")),
+                                   os.environ.get("AOS_CONTRACT", "0x2e75bc5796791b20b645b17dcf2a9dfc052c83ab")),
         "rpc": "https://rpc-bradbury.genlayer.com",
         "cli_network": "testnet-bradbury",
         "label": "Bradbury Testnet",

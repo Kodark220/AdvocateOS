@@ -2,7 +2,7 @@ import { Link2 } from 'lucide-react'
 import { getNetwork } from '../api'
 
 const CONTRACTS = {
-  bradbury: '0x6E7694c3ffbB4b109b2A37D009cE29425039E9da',
+  bradbury: '0x2e75bc5796791b20b645b17dcf2a9dfc052c83ab',
   studionet: '0x5b1C73fb7F1df7081126bF473eB40FfE77F05DFb',
 }
 

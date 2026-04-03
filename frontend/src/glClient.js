@@ -5,7 +5,7 @@ import { getNetwork } from './api'
 
 const CONTRACTS = {
   studionet: '0xA3C49D3B40EB3d4943812ED5B12BaB7FF1DEAeCe',
-  bradbury: '0x6E7694c3ffbB4b109b2A37D009cE29425039E9da',
+  bradbury: '0x2e75bc5796791b20b645b17dcf2a9dfc052c83ab',
 }
 
 const CHAINS = {

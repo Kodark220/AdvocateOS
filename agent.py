@@ -39,7 +39,7 @@ NETWORKS: dict[str, dict] = {
         "label": "Studionet",
     },
     "bradbury": {
-        "contract": os.environ.get("AOS_CONTRACT_BRADBURY", "0x6E7694c3ffbB4b109b2A37D009cE29425039E9da"),
+        "contract": os.environ.get("AOS_CONTRACT_BRADBURY", "0x2e75bc5796791b20b645b17dcf2a9dfc052c83ab"),
         "rpc": "https://rpc-bradbury.genlayer.com",
         "cli_network": "testnet-bradbury",
         "label": "Bradbury Testnet",
