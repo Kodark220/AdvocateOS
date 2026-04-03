@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { UserPlus, Building, Globe } from 'lucide-react'
 import { useWallet } from '../../context/WalletContext'
 import { registerAccount } from '../../api'
-import { createWriteClient, getContractAddress, getChainName } from '../../glClient'
+import { createWriteClient, getContractAddress, switchChain } from '../../glClient'
 import { TransactionStatus } from 'genlayer-js/types'
 
 const CHAINS = [
@@ -33,8 +33,8 @@ export default function RegisterPage() {
     if (provider && wallet) {
       try {
         setStatus('Switching wallet to GenLayer network...')
+        await switchChain(provider)
         const client = createWriteClient(wallet, provider)
-        await client.connect(getChainName())
 
         setStatus('Please confirm the transaction in your wallet...')
         const txHash = await client.writeContract({

@@ -43,6 +43,39 @@ export function createWriteClient(walletAddress, provider) {
   })
 }
 
+// ── Switch chain on a specific provider (bypasses genlayer-js's MetaMask-only connect) ──
+export async function switchChain(provider) {
+  if (!provider) throw new Error('No wallet provider available')
+  const chain = getChain()
+  const chainIdHex = `0x${chain.id.toString(16)}`
+
+  const currentChainId = await provider.request({ method: 'eth_chainId' })
+  if (currentChainId !== chainIdHex) {
+    try {
+      await provider.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: chainIdHex }],
+      })
+    } catch (switchErr) {
+      // 4902 = chain not added yet
+      if (switchErr.code === 4902 || switchErr.message?.includes('Unrecognized chain')) {
+        await provider.request({
+          method: 'wallet_addEthereumChain',
+          params: [{
+            chainId: chainIdHex,
+            chainName: chain.name,
+            rpcUrls: chain.rpcUrls.default.http,
+            nativeCurrency: chain.nativeCurrency,
+            blockExplorerUrls: [chain.blockExplorers?.default?.url].filter(Boolean),
+          }],
+        })
+      } else {
+        throw switchErr
+      }
+    }
+  }
+}
+
 // ── Direct contract read (returns parsed JSON or null) ──
 export async function contractRead(fn, args = []) {
   try {
@@ -63,8 +96,8 @@ export async function contractRead(fn, args = []) {
 export async function contractWrite(wallet, functionName, args, provider) {
   const p = provider || window.ethereum
   if (!p || !wallet) throw new Error('No wallet available')
+  await switchChain(p)
   const client = createWriteClient(wallet, p)
-  await client.connect(getChainName())
   const txHash = await client.writeContract({
     address: getContractAddress(),
     functionName,
