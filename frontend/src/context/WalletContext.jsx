@@ -205,6 +205,7 @@ export function WalletProvider({ children }) {
       signed, isRegistered, needsOnboarding, username, walletProviders,
       connectInjected, connectManual, disconnect, setError,
       markRegistered, checkRegistration,
+      get provider() { return activeProvider.current || window.ethereum },
     }}>
       {children}
     </WalletContext.Provider>

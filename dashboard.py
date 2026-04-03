@@ -340,7 +340,7 @@ def register():
     if not all([name, institution, ref, atype]):
         flash("All fields are required", "error")
         return redirect(url_for("accounts_page"))
-    ok = gl_write("register_account", name, institution, ref, atype, jur, wallet, chain)
+    ok = gl_write("register_account", name, institution, ref, atype, jur, chain)
     flash("Account registered successfully." if ok else "Registration failed — consensus issue.", "success" if ok else "error")
     return redirect(url_for("accounts_page"))
 
@@ -498,7 +498,7 @@ def api_register():
     chain = d.get("chain", "")
     if not all([name, institution, ref, atype]):
         return jsonify({"ok": False, "error": "missing fields"}), 400
-    ok = gl_write("register_account", name, institution, ref, atype, jur, wallet, chain, network=net)
+    ok = gl_write("register_account", name, institution, ref, atype, jur, chain, network=net)
     return jsonify({"ok": ok})
 
 

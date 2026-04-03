@@ -12,7 +12,7 @@ const VIOLATIONS = [
 ]
 
 export default function ReportPage() {
-  const { wallet } = useWallet()
+  const { wallet, provider } = useWallet()
   const navigate = useNavigate()
   const [accounts, setAccounts] = useState([])
   const [loading, setLoading] = useState(true)
@@ -46,7 +46,7 @@ export default function ReportPage() {
     setStatus('')
 
     // Try wallet-signed direct contract write
-    if (window.ethereum && wallet) {
+    if (provider && wallet) {
       try {
         setStatus('Please confirm the transaction in your wallet...')
         await contractWrite(wallet, 'report_violation', [
@@ -55,7 +55,7 @@ export default function ReportPage() {
           form.description,
           Number(form.amount),
           Number(form.severity),
-        ])
+        ], provider)
         setSubmitting(false)
         navigate('/my-cases')
         return

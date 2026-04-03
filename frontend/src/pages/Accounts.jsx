@@ -19,7 +19,7 @@ export default function Accounts() {
     name: '', institution: '', ref: '', atype: 'checking',
     jurisdiction: 'US', wallet: '', chain: '',
   })
-  const { wallet: connectedWallet } = useWallet()
+  const { wallet: connectedWallet, provider } = useWallet()
 
   // Wallet lookup state
   const [lookupAddr, setLookupAddr] = useState('')
@@ -69,7 +69,7 @@ export default function Accounts() {
     const walletAddr = form.wallet || connectedWallet
 
     // Try wallet-signed write first
-    if (window.ethereum && connectedWallet) {
+    if (provider && connectedWallet) {
       try {
         await contractWrite(connectedWallet, 'register_account', [
           form.name,
@@ -77,9 +77,8 @@ export default function Accounts() {
           form.ref,
           form.atype,
           form.jurisdiction,
-          walletAddr,
           form.chain || '',
-        ])
+        ], provider)
         setForm({ name: '', institution: '', ref: '', atype: 'checking', jurisdiction: 'US', wallet: '', chain: '' })
         setShowForm(false)
         await load()

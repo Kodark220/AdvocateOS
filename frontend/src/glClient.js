@@ -4,7 +4,7 @@ import { TransactionStatus } from 'genlayer-js/types'
 import { getNetwork } from './api'
 
 const CONTRACTS = {
-  studionet: '0x5b1C73fb7F1df7081126bF473eB40FfE77F05DFb',
+  studionet: '0xd55857A39092a80C16C152dffccF8098186BeAFF',
   bradbury: '0x6E7694c3ffbB4b109b2A37D009cE29425039E9da',
 }
 
@@ -59,10 +59,11 @@ export async function contractRead(fn, args = []) {
   }
 }
 
-// ── Wallet-signed contract write (pops MetaMask) ──
-export async function contractWrite(wallet, functionName, args) {
-  if (!window.ethereum || !wallet) throw new Error('No wallet available')
-  const client = createWriteClient(wallet, window.ethereum)
+// ── Wallet-signed contract write (pops wallet popup) ──
+export async function contractWrite(wallet, functionName, args, provider) {
+  const p = provider || window.ethereum
+  if (!p || !wallet) throw new Error('No wallet available')
+  const client = createWriteClient(wallet, p)
   await client.connect(getChainName())
   const txHash = await client.writeContract({
     address: getContractAddress(),

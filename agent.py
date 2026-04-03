@@ -567,7 +567,7 @@ def cmd_status():
 
 def cmd_add_account(name: str, institution: str, account_ref: str,
                     account_type: str, jurisdiction: str = "US",
-                    wallet_address: str = "", chain: str = "",
+                    chain: str = "",
                     data_url: str = ""):
     """Register a new account and optionally set its data URL."""
     if jurisdiction not in JURISDICTION_TIERS:
@@ -576,8 +576,8 @@ def cmd_add_account(name: str, institution: str, account_ref: str,
     if chain and chain not in SUPPORTED_CHAINS:
         log.error("Unsupported chain: %s. Use: %s", chain, ", ".join(SUPPORTED_CHAINS))
         return
-    log.info("Registering account: %s @ %s [%s] wallet=%s chain=%s", name, institution, jurisdiction, wallet_address, chain)
-    ok = gl_write("register_account", name, institution, account_ref, account_type, jurisdiction, wallet_address, chain)
+    log.info("Registering account: %s @ %s [%s] chain=%s", name, institution, jurisdiction, chain)
+    ok = gl_write("register_account", name, institution, account_ref, account_type, jurisdiction, chain)
     if ok:
         stats = fetch_stats()
         aid = stats["total_accounts"] if stats else "?"

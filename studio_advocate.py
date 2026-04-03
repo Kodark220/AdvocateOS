@@ -70,6 +70,8 @@ class StudioAdvocate(gl.Contract):
     accounts: TreeMap[u32, str]
     cases: TreeMap[u32, str]
     account_cases: TreeMap[u32, str]
+    owner_accounts: TreeMap[Address, str]
+    admin: Address
     total_violations: u32
     total_escalations: u32
     total_resolved: u32
@@ -80,6 +82,7 @@ class StudioAdvocate(gl.Contract):
         self.total_violations = u32(0)
         self.total_escalations = u32(0)
         self.total_resolved = u32(0)
+        self.admin = gl.message.sender_address
 
     # ── ACCOUNT MANAGEMENT ──
 
@@ -91,7 +94,6 @@ class StudioAdvocate(gl.Contract):
         account_ref: str,
         account_type: str,
         jurisdiction: str,
-        wallet_address: str,
         chain: str,
     ):
         if jurisdiction not in JURISDICTIONS:
@@ -104,6 +106,7 @@ class StudioAdvocate(gl.Contract):
                 f"Unsupported chain: {chain}. "
                 f"Use: {', '.join(SUPPORTED_CHAINS)}"
             )
+        sender = gl.message.sender_address
         self.account_counter = u32(self.account_counter + u32(1))
         aid = self.account_counter
         record = json.dumps({
@@ -113,21 +116,29 @@ class StudioAdvocate(gl.Contract):
             "account_ref": account_ref,
             "account_type": account_type,
             "jurisdiction": jurisdiction,
-            "wallet_address": str(wallet_address),
+            "wallet_address": sender.as_hex,
             "chain": chain,
             "terms_url": "",
             "active": True,
         }, sort_keys=True)
         self.accounts[aid] = record
 
+        existing = self.owner_accounts.get(sender, "")
+        if existing:
+            self.owner_accounts[sender] = existing + "," + str(int(aid))
+        else:
+            self.owner_accounts[sender] = str(int(aid))
+
     @gl.public.write
     def set_terms_url(self, account_id: u32, terms_url: str):
+        self._require_owner_or_admin(account_id)
         acc = json.loads(self.accounts[account_id])
         acc["terms_url"] = terms_url[:500]
         self.accounts[account_id] = json.dumps(acc, sort_keys=True)
 
     @gl.public.write
     def deactivate_account(self, account_id: u32):
+        self._require_owner_or_admin(account_id)
         raw = self.accounts[account_id]
         acc = json.loads(raw)
         acc["active"] = False
@@ -153,6 +164,7 @@ class StudioAdvocate(gl.Contract):
 
     @gl.public.write
     def scan_for_violations(self, account_id: u32, data_url: str):
+        self._require_owner_or_admin(account_id)
         acc = json.loads(self.accounts[account_id])
         if not acc.get("active"):
             raise gl.UserError("Account is deactivated")
@@ -237,6 +249,7 @@ class StudioAdvocate(gl.Contract):
         amount_disputed: u32,
         severity: u32,
     ):
+        self._require_owner_or_admin(account_id)
         if violation_type not in VIOLATION_TYPES:
             raise gl.UserError(f"Unknown violation type: {violation_type}")
         acc = json.loads(self.accounts[account_id])
@@ -252,6 +265,7 @@ class StudioAdvocate(gl.Contract):
 
     @gl.public.write
     def draft_complaint(self, case_id: u32):
+        self._require_case_owner_or_admin(case_id)
         case = json.loads(self.cases[case_id])
         if case.get("status") == "resolved":
             raise gl.UserError("Case already resolved")
@@ -339,6 +353,7 @@ class StudioAdvocate(gl.Contract):
 
     @gl.public.write
     def escalate(self, case_id: u32):
+        self._require_case_owner_or_admin(case_id)
         case = json.loads(self.cases[case_id])
         if case.get("status") == "resolved":
             raise gl.UserError("Case already resolved")
@@ -365,6 +380,7 @@ class StudioAdvocate(gl.Contract):
 
     @gl.public.write
     def check_and_auto_escalate(self, case_id: u32, current_timestamp: u32):
+        self._require_case_owner_or_admin(case_id)
         case = json.loads(self.cases[case_id])
 
         if case.get("status") == "resolved":
@@ -405,6 +421,7 @@ class StudioAdvocate(gl.Contract):
 
     @gl.public.write
     def resolve_case(self, case_id: u32, resolution_note: str, amount_recovered: u32):
+        self._require_case_owner_or_admin(case_id)
         case = json.loads(self.cases[case_id])
         if case.get("status") == "resolved":
             raise gl.UserError("Case already resolved")
@@ -418,6 +435,7 @@ class StudioAdvocate(gl.Contract):
 
     @gl.public.write
     def check_institution_response(self, case_id: u32, response_url: str):
+        self._require_case_owner_or_admin(case_id)
         case = json.loads(self.cases[case_id])
         if case.get("status") == "resolved":
             raise gl.UserError("Case already resolved")
@@ -594,7 +612,44 @@ class StudioAdvocate(gl.Contract):
             })
         return json.dumps(result)
 
+    @gl.public.view
+    def get_accounts_by_wallet(self, wallet_address: str) -> str:
+        results: list[dict] = []
+        i = u32(1)
+        while i <= self.account_counter:
+            try:
+                acc = json.loads(self.accounts[i])
+                if acc.get("wallet_address", "").lower() == wallet_address.lower():
+                    results.append(acc)
+            except Exception:
+                pass
+            i = u32(i + u32(1))
+        return json.dumps(results)
+
     # ── INTERNAL HELPERS ──
+
+    def _is_admin(self) -> bool:
+        return gl.message.sender_address == self.admin
+
+    def _is_owner(self, account_id: u32) -> bool:
+        owner_list = self.owner_accounts.get(gl.message.sender_address, "")
+        if not owner_list:
+            return False
+        return str(int(account_id)) in [x.strip() for x in owner_list.split(",")]
+
+    def _require_owner_or_admin(self, account_id: u32):
+        if self._is_admin():
+            return
+        if not self._is_owner(account_id):
+            raise gl.UserError("Only account owner or admin can perform this action")
+
+    def _require_case_owner_or_admin(self, case_id: u32):
+        if self._is_admin():
+            return
+        case = json.loads(self.cases[case_id])
+        aid = u32(case["account_id"])
+        if not self._is_owner(aid):
+            raise gl.UserError("Only case owner or admin can perform this action")
 
     def _create_case(
         self,

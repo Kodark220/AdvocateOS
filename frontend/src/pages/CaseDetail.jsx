@@ -13,7 +13,7 @@ const TIER_LABELS = {
 
 export default function CaseDetail() {
   const { id } = useParams()
-  const { role, wallet } = useWallet()
+  const { role, wallet, provider } = useWallet()
   const isAdmin = role === 'admin'
   const [c, setCase] = useState(null)
   const [path, setPath] = useState(null)
@@ -44,9 +44,9 @@ export default function CaseDetail() {
   const handleDraft = async () => {
     setActing('draft')
     setActError('')
-    if (window.ethereum && wallet) {
+    if (provider && wallet) {
       try {
-        await contractWrite(wallet, 'draft_complaint', [Number(id)])
+        await contractWrite(wallet, 'draft_complaint', [Number(id)], provider)
         await load()
         setActing('')
         return
@@ -63,9 +63,9 @@ export default function CaseDetail() {
   const handleEscalate = async () => {
     setActing('escalate')
     setActError('')
-    if (window.ethereum && wallet) {
+    if (provider && wallet) {
       try {
-        await contractWrite(wallet, 'escalate', [Number(id)])
+        await contractWrite(wallet, 'escalate', [Number(id)], provider)
         await load()
         setActing('')
         return
@@ -83,13 +83,13 @@ export default function CaseDetail() {
     e.preventDefault()
     setActing('resolve')
     setActError('')
-    if (window.ethereum && wallet) {
+    if (provider && wallet) {
       try {
         await contractWrite(wallet, 'resolve_case', [
           Number(id),
           resolveForm.note,
           Number(resolveForm.amount),
-        ])
+        ], provider)
         await load()
         setActing('')
         return

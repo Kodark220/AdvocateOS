@@ -25,7 +25,7 @@ export default function Incidents() {
   const [form, setForm] = useState({
     account_id: '', violation_type: VIOLATIONS[0], description: '', amount: '0', severity: '3',
   })
-  const { wallet } = useWallet()
+  const { wallet, provider } = useWallet()
 
   const load = async () => {
     setLoading(true)
@@ -49,7 +49,7 @@ export default function Incidents() {
     setReportError('')
 
     // Try wallet-signed write first
-    if (window.ethereum && wallet) {
+    if (provider && wallet) {
       try {
         await contractWrite(wallet, 'report_violation', [
           Number(form.account_id),
@@ -57,7 +57,7 @@ export default function Incidents() {
           form.description,
           Number(form.amount),
           Number(form.severity),
-        ])
+        ], provider)
         setShowReport(false)
         setForm(f => ({...f, description: '', amount: '0', severity: '3'}))
         await load()

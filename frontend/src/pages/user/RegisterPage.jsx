@@ -12,7 +12,7 @@ const CHAINS = [
 ]
 
 export default function RegisterPage() {
-  const { wallet, username, markRegistered } = useWallet()
+  const { wallet, username, markRegistered, provider } = useWallet()
   const navigate = useNavigate()
   const [submitting, setSubmitting] = useState(false)
   const [status, setStatus] = useState('')
@@ -30,10 +30,10 @@ export default function RegisterPage() {
     setStatus('')
 
     // Try wallet-signed direct contract write first
-    if (window.ethereum && wallet) {
+    if (provider && wallet) {
       try {
         setStatus('Switching wallet to GenLayer network...')
-        const client = createWriteClient(wallet, window.ethereum)
+        const client = createWriteClient(wallet, provider)
         await client.connect(getChainName())
 
         setStatus('Please confirm the transaction in your wallet...')
@@ -46,7 +46,6 @@ export default function RegisterPage() {
             form.ref,
             form.atype,
             form.jurisdiction,
-            wallet,
             form.chain || '',
           ],
           value: BigInt(0),
