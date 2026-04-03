@@ -24,17 +24,38 @@ export function WalletProvider({ children }) {
   useEffect(() => {
     const discovered = new Map()
 
-    const handleAnnounce = (event) => {
+    const handleAnnounce = async (event) => {
       const { info, provider } = event.detail
       if (info && provider && !discovered.has(info.uuid)) {
         discovered.set(info.uuid, { info, provider })
         setWalletProviders(Array.from(discovered.values()))
+
+        // Reconnect: if we have a stored wallet, check if this provider owns it
+        const storedWallet = localStorage.getItem('aos_wallet')
+        if (storedWallet && !activeProvider.current) {
+          try {
+            const accounts = await provider.request({ method: 'eth_accounts' })
+            if (accounts?.some(a => a.toLowerCase() === storedWallet.toLowerCase())) {
+              activeProvider.current = provider
+            }
+          } catch { /* provider doesn't support eth_accounts silently */ }
+        }
       }
     }
 
     window.addEventListener('eip6963:announceProvider', handleAnnounce)
     // Request all wallets to announce themselves
     window.dispatchEvent(new Event('eip6963:requestProvider'))
+
+    // Also try window.ethereum as fallback for reconnection
+    const storedWallet = localStorage.getItem('aos_wallet')
+    if (storedWallet && !activeProvider.current && window.ethereum) {
+      window.ethereum.request({ method: 'eth_accounts' }).then(accounts => {
+        if (accounts?.some(a => a.toLowerCase() === storedWallet.toLowerCase())) {
+          if (!activeProvider.current) activeProvider.current = window.ethereum
+        }
+      }).catch(() => {})
+    }
 
     return () => window.removeEventListener('eip6963:announceProvider', handleAnnounce)
   }, [])
@@ -72,9 +93,10 @@ export function WalletProvider({ children }) {
         return has
       }
     } catch {}
-    setRegistered(false)
-    localStorage.setItem('aos_registered', 'false')
-    return false
+    // Both checks failed (network error) — preserve existing state instead of forcing unregistered
+    const existing = localStorage.getItem('aos_registered') === 'true'
+    setRegistered(existing)
+    return existing
   }, [])
 
   // Sign a message to verify wallet ownership
