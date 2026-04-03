@@ -4,7 +4,7 @@ import { TransactionStatus } from 'genlayer-js/types'
 import { getNetwork } from './api'
 
 const CONTRACTS = {
-  studionet: '0xd55857A39092a80C16C152dffccF8098186BeAFF',
+  studionet: '0xA3C49D3B40EB3d4943812ED5B12BaB7FF1DEAeCe',
   bradbury: '0x6E7694c3ffbB4b109b2A37D009cE29425039E9da',
 }
 
